@@ -283,7 +283,107 @@ const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 // --- COMPONENTS ---
 
-// --- NEW COMPONENT: Quick Copy Card ---
+// --- NEW COMPONENT: Task Assistant AI Modal ---
+const TaskAssistantModal: React.FC<{ task: ActionItem, onClose: () => void }> = ({ task, onClose }) => {
+    const [messages, setMessages] = useState<ChatMessage[]>([]);
+    const [input, setInput] = useState('');
+    const [loading, setLoading] = useState(false);
+
+    useEffect(() => {
+        // Initial greeting
+        setMessages([{
+            role: 'ai',
+            text: `I see you're working on "${task.task}". How can I help you complete this? I can draft emails, explain legal forms, or find specific contact info.`
+        }]);
+    }, [task]);
+
+    const handleSend = async () => {
+        if (!input.trim()) return;
+        const userMsg: ChatMessage = { role: 'user', text: input };
+        setMessages(prev => [...prev, userMsg]);
+        setInput('');
+        setLoading(true);
+
+        try {
+            const ragContext = await getRagContext();
+            const prompt = `
+            You are an expert assistant helping a parent complete a specific recovery task: "${task.task}".
+            Description of task: "${task.description}"
+            
+            User Request: "${userMsg.text}"
+            
+            RAG Context (Available Evidence):
+            ${ragContext}
+            
+            Instructions:
+            - Be tactical and direct.
+            - If they need a letter, write the draft.
+            - If they need instructions, list step-by-step bullets.
+            - If they asked for a link (like to a form), try to provide the official URL for the country involved if you know it.
+            `;
+
+            const result = await ai.models.generateContent({
+                model: "gemini-2.5-flash",
+                contents: prompt
+            });
+            
+            const responseText = result.text || "I couldn't generate a response. Please try again.";
+            setMessages(prev => [...prev, { role: 'ai', text: responseText }]);
+        } catch (e) {
+            console.error(e);
+            setMessages(prev => [...prev, { role: 'ai', text: "Error connecting to assistant." }]);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    return (
+        <div className="tour-backdrop" onClick={onClose}>
+            <div className="tour-card" onClick={e => e.stopPropagation()} style={{ width: '600px', height: '80vh', display: 'flex', flexDirection: 'column' }}>
+                <div className="tour-header" style={{ borderBottom: '1px solid #eee', paddingBottom: '1rem' }}>
+                    <div>
+                        <h3 style={{ margin: 0 }}>🤖 Task Assistant</h3>
+                        <div style={{ fontSize: '0.8rem', color: '#666' }}>{task.task}</div>
+                    </div>
+                    <button className="tour-close" onClick={onClose}>×</button>
+                </div>
+                
+                <div style={{ flexGrow: 1, overflowY: 'auto', padding: '1rem', backgroundColor: '#f8f9fa' }}>
+                    {messages.map((m, i) => (
+                        <div key={i} style={{ marginBottom: '1rem', display: 'flex', justifyContent: m.role === 'user' ? 'flex-end' : 'flex-start' }}>
+                            <div style={{ 
+                                backgroundColor: m.role === 'user' ? '#005ac1' : 'white', 
+                                color: m.role === 'user' ? 'white' : 'black',
+                                padding: '0.8rem', 
+                                borderRadius: '12px',
+                                border: m.role === 'ai' ? '1px solid #ddd' : 'none',
+                                maxWidth: '80%',
+                                whiteSpace: 'pre-wrap',
+                                fontSize: '0.95rem'
+                            }}>
+                                {m.text}
+                            </div>
+                        </div>
+                    ))}
+                    {loading && <div style={{ fontSize: '0.8rem', color: '#666', fontStyle: 'italic' }}>Thinking...</div>}
+                </div>
+
+                <div style={{ padding: '1rem', borderTop: '1px solid #eee', display: 'flex', gap: '0.5rem' }}>
+                    <input 
+                        type="text" 
+                        value={input} 
+                        onChange={e => setInput(e.target.value)}
+                        onKeyDown={e => e.key === 'Enter' && handleSend()}
+                        placeholder="Ask for help (e.g. 'Draft the letter', 'What is the URL?')"
+                        style={{ flexGrow: 1 }}
+                    />
+                    <button className="button-primary" onClick={handleSend}>Send</button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 const QuickCopyCard: React.FC<{ profile: CaseProfile }> = ({ profile }) => {
     const copyToClipboard = (text: string, label: string) => {
         if (!text) return;
@@ -292,26 +392,23 @@ const QuickCopyCard: React.FC<{ profile: CaseProfile }> = ({ profile }) => {
     };
 
     return (
-        <div className="tool-card" style={{ cursor: 'default', padding: '1rem', marginBottom: '1rem' }}>
-            <h3 style={{ fontSize: '1rem', marginTop: 0 }}>📇 Case Reference Card</h3>
-            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                <button className="button-secondary" style={{ fontSize: '0.8rem', padding: '0.25rem 0.75rem' }} onClick={() => copyToClipboard(profile.childName, "Child Name")}>
-                    Child: {profile.childName} 📋
+        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '1.5rem' }}>
+            <button className="button-secondary" style={{ fontSize: '0.8rem', padding: '0.25rem 0.75rem', backgroundColor: 'white', border: '1px solid #dbe2f9' }} onClick={() => copyToClipboard(profile.childName, "Child Name")}>
+                Child: <strong>{profile.childName}</strong> 📋
+            </button>
+            {profile.childDOB && (
+                <button className="button-secondary" style={{ fontSize: '0.8rem', padding: '0.25rem 0.75rem', backgroundColor: 'white', border: '1px solid #dbe2f9' }} onClick={() => copyToClipboard(profile.childDOB!, "DOB")}>
+                    DOB: <strong>{profile.childDOB}</strong> 📋
                 </button>
-                {profile.childDOB && (
-                    <button className="button-secondary" style={{ fontSize: '0.8rem', padding: '0.25rem 0.75rem' }} onClick={() => copyToClipboard(profile.childDOB!, "DOB")}>
-                        DOB: {profile.childDOB} 📋
-                    </button>
-                )}
-                <button className="button-secondary" style={{ fontSize: '0.8rem', padding: '0.25rem 0.75rem' }} onClick={() => copyToClipboard(profile.abductionDate, "Abduction Date")}>
-                    Taken: {profile.abductionDate} 📋
+            )}
+            <button className="button-secondary" style={{ fontSize: '0.8rem', padding: '0.25rem 0.75rem', backgroundColor: 'white', border: '1px solid #dbe2f9' }} onClick={() => copyToClipboard(profile.abductionDate, "Abduction Date")}>
+                Taken: <strong>{profile.abductionDate}</strong> 📋
+            </button>
+            {Object.entries(profile.caseNumbers || {}).map(([key, val]) => (
+                 <button key={key} className="button-secondary" style={{ fontSize: '0.8rem', padding: '0.25rem 0.75rem', backgroundColor: 'white', border: '1px solid #005ac1', color: '#005ac1' }} onClick={() => copyToClipboard(val, key)}>
+                    {key}: <strong>{val}</strong> 📋
                 </button>
-                {Object.entries(profile.caseNumbers || {}).map(([key, val]) => (
-                     <button key={key} className="button-secondary" style={{ fontSize: '0.8rem', padding: '0.25rem 0.75rem', borderColor: '#005ac1', color: '#005ac1' }} onClick={() => copyToClipboard(val, key)}>
-                        {key}: {val} 📋
-                    </button>
-                ))}
-            </div>
+            ))}
         </div>
     );
 };
@@ -320,14 +417,12 @@ const IntelligenceBriefWidget: React.FC<{ profile: CaseProfile, onUpdate: (d: Do
     const [loading, setLoading] = useState(false);
     const [viewIndex, setViewIndex] = useState(0);
     
-    // History is stored in profile, newest LAST.
     const history = profile.dossierHistory || (profile.dossierData ? [profile.dossierData] : []);
-    const currentView = history[history.length - 1 - viewIndex]; // Reverse for viewing
+    const currentView = history[history.length - 1 - viewIndex]; 
 
     const refreshAnalysis = async () => {
         setLoading(true);
         try {
-            // Get recent logs for context
             const savedLogs = localStorage.getItem('caseLogs');
             let recentContext: string = "No recent logs available.";
             if (savedLogs) {
@@ -374,7 +469,7 @@ const IntelligenceBriefWidget: React.FC<{ profile: CaseProfile, onUpdate: (d: Do
             const data = text ? JSON.parse(text) : {};
             const newDossier = { ...data, dateGenerated: new Date().toLocaleString() };
             onUpdate(newDossier);
-            setViewIndex(0); // Reset view to newest
+            setViewIndex(0); 
         } catch (e) {
             console.error(e);
         } finally {
@@ -507,8 +602,8 @@ const SimilarCasesWidget: React.FC<{ from: string, to: string }> = ({ from, to }
                         if (chunk.web?.uri && chunk.web?.title) {
                              foundStories.push({
                                  title: chunk.web.title,
-                                 url: chunk.web.uri,
-                                 source: new URL(chunk.web.uri).hostname
+                                 url: chunk.web.uri as string,
+                                 source: new URL(chunk.web.uri as string).hostname
                              });
                         }
                     });
@@ -542,6 +637,7 @@ const SimilarCasesWidget: React.FC<{ from: string, to: string }> = ({ from, to }
 };
 
 const TaskBrainstormer: React.FC<{ profile: CaseProfile, onAddTask: (task: ActionItem) => void }> = ({ profile, onAddTask }) => {
+    // ... (unchanged)
     const [input, setInput] = useState('');
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [loading, setLoading] = useState(false);
@@ -671,20 +767,36 @@ const TaskBrainstormer: React.FC<{ profile: CaseProfile, onAddTask: (task: Actio
     );
 };
 
-// ... (rest of the file)
 const MyChecklist: React.FC<{ items: ActionItem[]; setItems: React.Dispatch<React.SetStateAction<ActionItem[]>>; onOpenBrainstorm: () => void }> = ({ items, setItems, onOpenBrainstorm }) => {
+    const [assistingTask, setAssistingTask] = useState<ActionItem | null>(null);
+
     const toggleItem = (id: string) => {
         setItems(prev => prev.map(i => i.id === id ? { ...i, completed: !i.completed } : i));
     };
 
     const exportTasksPDF = () => {
         const doc = new jsPDF();
-        doc.setFontSize(20);
-        doc.setTextColor(0, 90, 193); // Primary Blue
-        doc.text("Recovery Plan of Action", 10, 20);
-        doc.setFontSize(12);
+        
+        // Professional Header
+        doc.setFillColor(0, 90, 193); // Primary Blue
+        doc.rect(0, 0, 210, 20, 'F');
+        
+        doc.setFontSize(18);
+        doc.setTextColor(255, 255, 255);
+        doc.setFont("helvetica", "bold");
+        doc.text("RECOVERY HUB: OFFICIAL ACTION PLAN", 10, 13);
+        
+        // Watermark
+        doc.setTextColor(200, 200, 200);
+        doc.setFontSize(40);
+        doc.text("LEGAL PRIVILEGE", 40, 150, { angle: 45 });
+
+        // Metadata
+        doc.setFontSize(10);
         doc.setTextColor(0, 0, 0);
+        doc.setFont("helvetica", "normal");
         doc.text(`Generated: ${new Date().toLocaleDateString()}`, 10, 30);
+        doc.text("Confidential Case Document", 150, 30);
         
         let y = 40;
         
@@ -693,27 +805,33 @@ const MyChecklist: React.FC<{ items: ActionItem[]; setItems: React.Dispatch<Reac
         categories.forEach(prio => {
             const tasks = items.filter(i => i.priority === prio);
             if (tasks.length > 0) {
-                doc.setFontSize(14);
-                doc.setFillColor(240, 240, 240);
-                doc.rect(10, y-5, 190, 8, 'F');
-                doc.setTextColor(0,0,0);
+                // Section Header
+                doc.setFontSize(12);
+                doc.setFillColor(240, 240, 245);
+                doc.rect(10, y-6, 190, 8, 'F');
+                
+                doc.setTextColor(0, 0, 0);
                 doc.setFont("helvetica", "bold");
                 doc.text(`${prio.toUpperCase()} PRIORITY`, 12, y);
-                y += 10;
+                y += 8;
                 
                 tasks.forEach(item => {
+                    const check = item.completed ? "[X]" : "[  ]";
+                    
+                    // Task Title
                     doc.setFont("helvetica", "bold");
                     doc.setFontSize(11);
-                    const check = item.completed ? "[X]" : "[ ]";
+                    doc.setTextColor(0, 0, 0);
                     doc.text(`${check} ${item.task}`, 15, y);
                     y += 5;
                     
+                    // Task Desc
                     doc.setFont("helvetica", "normal");
                     doc.setFontSize(10);
                     doc.setTextColor(80, 80, 80);
                     const lines = doc.splitTextToSize(item.description, 170);
                     doc.text(lines, 20, y);
-                    y += (lines.length * 5) + 5;
+                    y += (lines.length * 5) + 8;
                     
                     if (y >= 270) {
                         doc.addPage();
@@ -724,7 +842,7 @@ const MyChecklist: React.FC<{ items: ActionItem[]; setItems: React.Dispatch<Reac
             }
         });
         
-        doc.save("Action_Plan.pdf");
+        doc.save("Official_Action_Plan.pdf");
     };
 
     return (
@@ -732,8 +850,8 @@ const MyChecklist: React.FC<{ items: ActionItem[]; setItems: React.Dispatch<Reac
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <h2>Universal Action Plan</h2>
                 <div style={{display: 'flex', gap: '0.5rem'}}>
-                    <button className="button-secondary" onClick={exportTasksPDF}>🖨️ Export Plan</button>
-                    <button className="button-secondary" onClick={onOpenBrainstorm}>💡 Brainstorm Tasks</button>
+                    <button className="button-secondary" onClick={exportTasksPDF}>🖨️ Export PDF</button>
+                    <button className="button-secondary" onClick={onOpenBrainstorm}>💡 Brainstorm</button>
                 </div>
             </div>
             <div className="items-list">
@@ -744,18 +862,35 @@ const MyChecklist: React.FC<{ items: ActionItem[]; setItems: React.Dispatch<Reac
                                 <input type="checkbox" className="action-item-checkbox" checked={item.completed} onChange={() => toggleItem(item.id)} />
                                 <strong>{item.task}</strong>
                             </div>
-                            <span className={`action-item-priority ${item.priority.toLowerCase()}`}>{item.priority}</span>
+                            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                                <button className="button-ai" style={{ fontSize: '0.7rem', padding: '2px 8px' }} onClick={() => setAssistingTask(item)}>
+                                    🤖 AI Guide
+                                </button>
+                                <span className={`action-item-priority ${item.priority.toLowerCase()}`}>{item.priority}</span>
+                            </div>
                         </div>
                         <p style={{ margin: '0.5rem 0 0 2rem', fontSize: '0.9rem' }}>{item.description}</p>
+                        {item.subtasks && item.subtasks.length > 0 && (
+                            <div style={{ marginLeft: '2rem', marginTop: '0.5rem' }}>
+                                {item.subtasks.map(sub => (
+                                    <div key={sub.id} style={{ fontSize: '0.85rem', color: '#555' }}>- {sub.text}</div>
+                                ))}
+                            </div>
+                        )}
                     </div>
                 ))}
                 {items.length === 0 && <p>No items yet. Go to Dashboard to generate a plan.</p>}
             </div>
+
+            {assistingTask && (
+                <TaskAssistantModal task={assistingTask} onClose={() => setAssistingTask(null)} />
+            )}
         </div>
     );
 };
 
 const DocumentVault: React.FC = () => {
+    // ... (unchanged)
     const [files, setFiles] = useState<VaultDocument[]>([]);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [analysisStatus, setAnalysisStatus] = useState('');
@@ -882,6 +1017,7 @@ const DocumentVault: React.FC = () => {
 };
 
 const CaseJournal: React.FC = () => {
+    // ... (unchanged)
     const [logs, setLogs] = useState<LogEntry[]>([]);
     const [newLog, setNewLog] = useState<{ type: string; description: string; people: string }>({ type: 'Phone Call', description: '', people: '' });
     const [isPolishing, setIsPolishing] = useState(false);
@@ -923,7 +1059,6 @@ const CaseJournal: React.FC = () => {
     const handleDocUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files?.[0]) {
             if (!confirm("Should this document generate Timeline Events? OK = Yes (Timeline + Vault), Cancel = No (Vault Only)")) {
-                 // Redirect to Vault logic maybe? But for now just return and they can use Vault.
                  alert("To store without timeline parsing, please use the 'Digital Vault' tool.");
                  return;
             }
@@ -931,8 +1066,6 @@ const CaseJournal: React.FC = () => {
             const file = e.target.files[0];
             try {
                  const base64 = await fileToBase64(file);
-                 
-                 // NEW PROMPT: Look for MULTIPLE events in one doc
                  const prompt = `
                  Analyze this legal document. It may describe a HISTORY of events.
                  
@@ -955,7 +1088,6 @@ const CaseJournal: React.FC = () => {
                  const text = result.text;
                  const analysis = text ? JSON.parse(text) : {};
                  
-                 // 1. Create the Main Vault Doc
                  const vaultDoc: VaultDocument = {
                     id: Date.now().toString(),
                     name: file.name,
@@ -974,12 +1106,11 @@ const CaseJournal: React.FC = () => {
                 }
                 await saveFileToLocalVault(vaultDoc, file);
 
-                // 2. Create distinct Log Entries for the extracted events
                 if (analysis.timelineEvents && Array.isArray(analysis.timelineEvents)) {
                     const newLogs: LogEntry[] = analysis.timelineEvents.map((evt: any, i: number) => ({
                         id: Date.now().toString() + i,
                         date: evt.date,
-                        time: "09:00", // default
+                        time: "09:00",
                         type: evt.type || "Other",
                         description: evt.description + ` (Source: ${file.name})`,
                         peopleInvolved: "",
@@ -991,7 +1122,7 @@ const CaseJournal: React.FC = () => {
                     setLogs(prev => [...newLogs, ...prev]);
                     alert(`Found ${newLogs.length} events in document and added to timeline!`);
                 } else {
-                     fetchTimeline(); // Just refresh if no granular events found
+                     fetchTimeline();
                      alert(`Analyzed & Saved: ${vaultDoc.type}`);
                 }
             } catch (err) {
@@ -1034,10 +1165,9 @@ const CaseJournal: React.FC = () => {
                  const data = req.result;
                  data.isPublic = !currentVal;
                  store.put(data);
-                 fetchTimeline(); // Refresh UI
+                 fetchTimeline(); 
              };
         } else {
-            // Update Log
             setLogs(logs.map(l => l.id === id ? { ...l, isPublic: !currentVal } : l));
         }
     };
@@ -1059,21 +1189,18 @@ const CaseJournal: React.FC = () => {
     const exportPDF = () => {
         const doc = new jsPDF();
         
-        // Title Page / Header
-        doc.setFontSize(22);
-        doc.setTextColor(0, 90, 193);
-        doc.text("Case Timeline & Evidence Log", 10, 20);
-        
+        doc.setFillColor(0, 0, 0);
+        doc.rect(0, 0, 210, 20, 'F');
+        doc.setFontSize(20);
+        doc.setTextColor(255, 255, 255);
+        doc.text("EVIDENCE LOG & CHRONOLOGY", 10, 13);
+
         doc.setFontSize(10);
         doc.setTextColor(100, 100, 100);
         doc.text(`Generated: ${new Date().toLocaleDateString()}`, 10, 28);
         
         let y = 40;
         
-        doc.setLineWidth(0.5);
-        doc.setDrawColor(200, 200, 200);
-        doc.line(10, 32, 200, 32);
-
         timelineItems.forEach(item => {
             if (filter === 'logs' && item.timelineType !== 'log') return;
             if (filter === 'docs' && item.timelineType !== 'doc') return;
@@ -1082,23 +1209,20 @@ const CaseJournal: React.FC = () => {
             const dateStr = isDoc ? new Date(item.date).toLocaleDateString() : `${item.date}`;
             const typeStr = isDoc ? item.type.toUpperCase() : item.type.toUpperCase();
             
-            // Date Column
             doc.setFontSize(11);
             doc.setTextColor(0, 0, 0);
             doc.setFont("helvetica", "bold");
             doc.text(dateStr, 10, y);
             
-            // Type Badge representation
-            doc.setFillColor(isDoc ? 230 : 245, isDoc ? 230 : 245, isDoc ? 250 : 255);
+            doc.setFillColor(isDoc ? 230 : 240, isDoc ? 230 : 240, isDoc ? 250 : 250);
             doc.rect(40, y-4, 160, 8, 'F');
             
             doc.setFontSize(9);
-            doc.setTextColor(isDoc ? 50 : 100, isDoc ? 0 : 50, isDoc ? 100 : 150);
+            doc.setTextColor(0, 0, 0);
             doc.text(typeStr, 42, y+1);
             
             y += 6;
             
-            // Description
             doc.setFont("helvetica", "normal");
             doc.setTextColor(0, 0, 0);
             doc.setFontSize(10);
@@ -1132,11 +1256,11 @@ const CaseJournal: React.FC = () => {
             </div>
             
             <p style={{fontSize:'0.85rem', color: '#666'}}>
-                Click the Globe 🌍 icon to toggle an event as "Public" for your campaign website. 
-                Upload documents with multiple events to auto-parse them.
+                Click the Globe 🌍 icon to toggle an event as "Public" for your campaign website.
             </p>
 
-            <div className="form-grid" style={{ backgroundColor: '#f8f9fa', padding: '1rem', borderRadius: '8px', marginBottom: '2rem' }}>
+            {/* Fixed Z-Index and Positioning for Upload Form */}
+            <div className="form-grid" style={{ position: 'relative', zIndex: 10, backgroundColor: '#f8f9fa', padding: '1rem', borderRadius: '8px', marginBottom: '2rem', border: '1px solid #eee' }}>
                 <h4 style={{ margin: '0 0 0.5rem 0' }}>Add New Event Log</h4>
                 <select value={newLog.type} onChange={e => setNewLog({...newLog, type: e.target.value})}>
                     <option>Phone Call</option>
@@ -1156,7 +1280,7 @@ const CaseJournal: React.FC = () => {
                         
                         <div style={{ position: 'relative' }}>
                             <input type="file" id="timeline-upload" style={{display:'none'}} onChange={handleDocUpload} accept=".pdf,image/*" />
-                            <label htmlFor="timeline-upload" className="button-secondary" style={{ cursor: 'pointer', fontSize: '0.85rem' }}>
+                            <label htmlFor="timeline-upload" className="button-secondary" style={{ cursor: 'pointer', fontSize: '0.85rem', position: 'relative', zIndex: 20 }}>
                                 {analyzingDoc ? 'Parsing Events...' : '➕ Upload & Map to Timeline'}
                             </label>
                         </div>
@@ -1223,6 +1347,103 @@ const CaseJournal: React.FC = () => {
     );
 };
 
+const KnowledgeBaseBuilder: React.FC = () => {
+    const [search, setSearch] = useState('');
+    const [selectedEntry, setSelectedEntry] = useState<KnowledgeBaseEntry | null>(null);
+    const [entries, setEntries] = useState<KnowledgeBaseEntry[]>([]);
+
+    // Seed Data (If DB is empty)
+    const seedData: KnowledgeBaseEntry[] = [
+        { 
+            id: '1', entryType: 'resource', name: 'Hague Convention Text (Full)', countryPair: 'Global', resourceType: 'Legal Text', 
+            tags: ['Legal', 'Treaty', 'Official'], summary: 'Full text of the 1980 Hague Convention on the Civil Aspects of International Child Abduction.',
+            fullText: `(Sample Text - Full treaty would be here)\n\nArticle 1\nThe objects of the present Convention are:\na) to secure the prompt return of children wrongfully removed to or retained in any Contracting State;\nb) to ensure that rights of custody and of access under the law of one Contracting State are effectively respected in the other Contracting States.`
+        },
+        { 
+            id: '5', entryType: 'template', name: 'Police Report Filing Template', countryPair: 'Global', resourceType: 'Template', 
+            tags: ['Police', 'Documentation'], summary: 'Standardized format for filing a missing child report to ensure all key details are recorded.',
+            fullText: `MISSING CHILD REPORT - INITIAL INTAKE\n\n1. CHILD INFORMATION\nName: [Full Name]\nDOB: [Date]\nPassport #: [Number]\nLast Known Location: [Address/Country]\n\n2. ABDUCTOR INFORMATION\nName: [Name]\nRelationship: [Role]\nVehicle: [Make/Model/Plate]\n\n3. CIRCUMSTANCES\nDate/Time of Taking: [Time]\nCustody Order in Place? [Yes/No]\nDescription of Taking: [Details]\n\n4. JURISDICTION\n(Note to Officer: This is a parental abduction under federal law. Please enter child into NCIC as Missing Person - Endangered.)`
+        }
+    ];
+
+    useEffect(() => {
+        // Try to fetch from Cloud Firestore first (Restoring "Lost" Knowledge)
+        const fetchEntries = async () => {
+            try {
+                const q = query(collection(db, 'knowledgeBaseEntries'));
+                const snap = await getDocs(q);
+                if (!snap.empty) {
+                    const cloudEntries = snap.docs.map(d => ({ id: d.id, ...d.data() } as KnowledgeBaseEntry));
+                    setEntries([...seedData, ...cloudEntries]); // Combine seed + cloud
+                } else {
+                    setEntries(seedData);
+                }
+            } catch (e) {
+                console.warn("Offline or no KB permissions", e);
+                setEntries(seedData);
+            }
+        };
+        fetchEntries();
+    }, []);
+
+    const filtered = entries.filter(e => e.name.toLowerCase().includes(search.toLowerCase()) || e.tags?.some(t => t.toLowerCase().includes(search.toLowerCase())));
+
+    const seedCloud = async () => {
+        if (!auth.currentUser) { alert("Please sign in to save templates to the cloud."); return; }
+        try {
+            const batch = writeBatch(db);
+            seedData.forEach(e => {
+                const ref = doc(collection(db, 'knowledgeBaseEntries'));
+                batch.set(ref, e);
+            });
+            await batch.commit();
+            alert("Knowledge Base Seeded to Cloud!");
+        } catch (e) { console.error(e); }
+    };
+
+    return (
+        <div className="tool-card" style={{ cursor: 'default' }}>
+            <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+                <h2>Community Knowledge Base</h2>
+                <button className="button-secondary" style={{fontSize:'0.7rem'}} onClick={seedCloud}>Restore Default Templates</button>
+            </div>
+            <p>A curated library of legal texts, government guides, and operational security templates. Click to view full content.</p>
+            <input type="text" placeholder="Search resources, guides, legal texts..." value={search} onChange={e => setSearch(e.target.value)} style={{ marginBottom: '1rem' }} />
+            <div className="tools-grid">
+                {filtered.map(entry => (
+                    <div key={entry.id} className="dossier-card" style={{ minHeight: '180px', cursor: 'pointer' }} onClick={() => setSelectedEntry(entry)}>
+                        <div className="section-header">{entry.resourceType}</div>
+                        <h4 style={{ margin: '0.5rem 0' }}>{entry.name}</h4>
+                        <p style={{ fontSize: '0.85rem', color: '#555' }}>{entry.summary}</p>
+                        <div style={{ display: 'flex', gap: '0.5rem', marginTop: 'auto', flexWrap: 'wrap' }}>
+                            {entry.tags?.map(t => <span key={t} className="journal-badge" style={{ fontSize: '0.65rem' }}>{t}</span>)}
+                        </div>
+                    </div>
+                ))}
+            </div>
+
+            {selectedEntry && (
+                <div className="tour-backdrop" onClick={() => setSelectedEntry(null)}>
+                    <div className="tour-card" onClick={e => e.stopPropagation()} style={{ maxWidth: '800px', maxHeight: '80vh', overflowY: 'auto' }}>
+                        <div className="tour-header">
+                            <h3>{selectedEntry.name}</h3>
+                            <button className="tour-close" onClick={() => setSelectedEntry(null)}>×</button>
+                        </div>
+                        <div style={{ whiteSpace: 'pre-wrap', fontFamily: 'monospace', backgroundColor: '#f5f5f5', padding: '1rem', borderRadius: '8px', marginBottom: '1rem' }}>
+                            {selectedEntry.fullText || "Content preview not available in offline mode."}
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem' }}>
+                            <button className="button-secondary" onClick={() => navigator.clipboard.writeText(selectedEntry.fullText || '')}>Copy to Clipboard</button>
+                            <button className="button-primary" onClick={() => setSelectedEntry(null)}>Close</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
+// ... (Rest of file remains unchanged, just ensuring the new components are used)
 const ExpensesTracker: React.FC = () => {
    // ... (No changes needed here)
    const [expenses, setExpenses] = useState<ExpenseEntry[]>([]);
@@ -1294,71 +1515,6 @@ const ExpensesTracker: React.FC = () => {
         </div>
     );
 };
-
-const KnowledgeBaseBuilder: React.FC = () => {
-    const [search, setSearch] = useState('');
-    const [selectedEntry, setSelectedEntry] = useState<KnowledgeBaseEntry | null>(null);
-
-    // Comprehensive mock data with full text
-    const entries: KnowledgeBaseEntry[] = [
-        { 
-            id: '1', entryType: 'resource', name: 'Hague Convention Text (Full)', countryPair: 'Global', resourceType: 'Legal Text', 
-            tags: ['Legal', 'Treaty', 'Official'], summary: 'Full text of the 1980 Hague Convention on the Civil Aspects of International Child Abduction.',
-            fullText: `(Sample Text - Full treaty would be here)\n\nArticle 1\nThe objects of the present Convention are:\na) to secure the prompt return of children wrongfully removed to or retained in any Contracting State;\nb) to ensure that rights of custody and of access under the law of one Contracting State are effectively respected in the other Contracting States.`
-        },
-        { 
-            id: '5', entryType: 'template', name: 'Police Report Filing Template', countryPair: 'Global', resourceType: 'Template', 
-            tags: ['Police', 'Documentation'], summary: 'Standardized format for filing a missing child report to ensure all key details are recorded.',
-            fullText: `MISSING CHILD REPORT - INITIAL INTAKE\n\n1. CHILD INFORMATION\nName: [Full Name]\nDOB: [Date]\nPassport #: [Number]\nLast Known Location: [Address/Country]\n\n2. ABDUCTOR INFORMATION\nName: [Name]\nRelationship: [Role]\nVehicle: [Make/Model/Plate]\n\n3. CIRCUMSTANCES\nDate/Time of Taking: [Time]\nCustody Order in Place? [Yes/No]\nDescription of Taking: [Details]\n\n4. JURISDICTION\n(Note to Officer: This is a parental abduction under federal law. Please enter child into NCIC as Missing Person - Endangered.)`
-        },
-        { 
-            id: '13', entryType: 'template', name: 'Left-Behind Parent Statement (Affidavit)', countryPair: 'Global', resourceType: 'Template', 
-            tags: ['Legal', 'Affidavit'], summary: 'Template for writing a personal impact statement for court.',
-            fullText: `AFFIDAVIT OF [YOUR NAME]\n\nI, [Your Name], being duly sworn, depose and state as follows:\n\n1. I am the [Mother/Father] of the minor child, [Child Name], born on [Date].\n2. On [Date], the child was habitually resident in [Home Country].\n3. I was exercising my custody rights at the time of the wrongful removal/retention.\n4. On [Date], the Respondent removed the child to [Foreign Country] without my consent.\n5. [Describe impact, lack of contact, and efforts to recover].\n\nI declare under penalty of perjury that the foregoing is true and correct.`
-        }
-    ];
-
-    const filtered = entries.filter(e => e.name.toLowerCase().includes(search.toLowerCase()) || e.tags?.some(t => t.toLowerCase().includes(search.toLowerCase())));
-
-    return (
-        <div className="tool-card" style={{ cursor: 'default' }}>
-            <h2>Community Knowledge Base</h2>
-            <p>A curated library of legal texts, government guides, and operational security templates. Click to view full content.</p>
-            <input type="text" placeholder="Search resources, guides, legal texts..." value={search} onChange={e => setSearch(e.target.value)} style={{ marginBottom: '1rem' }} />
-            <div className="tools-grid">
-                {filtered.map(entry => (
-                    <div key={entry.id} className="dossier-card" style={{ minHeight: '180px', cursor: 'pointer' }} onClick={() => setSelectedEntry(entry)}>
-                        <div className="section-header">{entry.resourceType}</div>
-                        <h4 style={{ margin: '0.5rem 0' }}>{entry.name}</h4>
-                        <p style={{ fontSize: '0.85rem', color: '#555' }}>{entry.summary}</p>
-                        <div style={{ display: 'flex', gap: '0.5rem', marginTop: 'auto', flexWrap: 'wrap' }}>
-                            {entry.tags?.map(t => <span key={t} className="journal-badge" style={{ fontSize: '0.65rem' }}>{t}</span>)}
-                        </div>
-                    </div>
-                ))}
-            </div>
-
-            {selectedEntry && (
-                <div className="tour-backdrop" onClick={() => setSelectedEntry(null)}>
-                    <div className="tour-card" onClick={e => e.stopPropagation()} style={{ maxWidth: '800px', maxHeight: '80vh', overflowY: 'auto' }}>
-                        <div className="tour-header">
-                            <h3>{selectedEntry.name}</h3>
-                            <button className="tour-close" onClick={() => setSelectedEntry(null)}>×</button>
-                        </div>
-                        <div style={{ whiteSpace: 'pre-wrap', fontFamily: 'monospace', backgroundColor: '#f5f5f5', padding: '1rem', borderRadius: '8px', marginBottom: '1rem' }}>
-                            {selectedEntry.fullText || "Content preview not available in offline mode."}
-                        </div>
-                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem' }}>
-                            <button className="button-secondary" onClick={() => navigator.clipboard.writeText(selectedEntry.fullText || '')}>Copy to Clipboard</button>
-                            <button className="button-primary" onClick={() => setSelectedEntry(null)}>Close</button>
-                        </div>
-                    </div>
-                </div>
-            )}
-        </div>
-    );
-};
-
 const LiveGuide: React.FC = () => {
     // ... (Same as before)
     const [connected, setConnected] = useState(false);
@@ -2401,6 +2557,8 @@ const App: React.FC = () => {
             - "High": First week legal actions (Hague application, Lawyer retention).
             - "Medium": Evidence gathering and logistical support.
             - "Low": Long-term administrative tasks.
+            
+            Include 1-2 subtasks for complex items.
             `;
 
             const result = await ai.models.generateContent({
@@ -2416,7 +2574,18 @@ const App: React.FC = () => {
                                 category: { type: Type.STRING },
                                 task: { type: Type.STRING },
                                 description: { type: Type.STRING },
-                                priority: { type: Type.STRING }
+                                priority: { type: Type.STRING },
+                                subtasks: { 
+                                    type: Type.ARRAY, 
+                                    items: { 
+                                        type: Type.OBJECT, 
+                                        properties: { 
+                                            id: { type: Type.STRING }, 
+                                            text: { type: Type.STRING },
+                                            completed: { type: Type.BOOLEAN }
+                                        }
+                                    } 
+                                }
                             },
                             required: ["category", "task", "description", "priority"]
                         }
@@ -2433,7 +2602,8 @@ const App: React.FC = () => {
                     task: t.task,
                     description: t.description,
                     priority: t.priority,
-                    completed: false
+                    completed: false,
+                    subtasks: t.subtasks ? t.subtasks.map((st: any, si: number) => ({ ...st, id: Date.now() + i + 'sub' + si })) : []
                 }));
                 setItems(formattedTasks);
                 setView('myChecklist');
@@ -2461,8 +2631,9 @@ const App: React.FC = () => {
         switch (view) {
             case 'onboarding': return <OnboardingWizard onComplete={(p) => { setCaseProfile(p); setView('dashboard'); }} />;
             case 'dashboard': return (
-                <div className="tools-grid">
-                    <div className="dashboard-hero full-width">
+                <div className="dashboard-container">
+                    {/* 1. STATUS BOARD (HERO) */}
+                    <div className="dashboard-hero">
                         <div className="hero-top-bar">
                             <div className="day-counter">DAY {caseProfile.abductionDate ? Math.floor((new Date().getTime() - new Date(caseProfile.abductionDate).getTime()) / (1000 * 3600 * 24)) : 0} OF RECOVERY</div>
                             <div className="status-pill active">ACTIVE CASE</div>
@@ -2479,15 +2650,47 @@ const App: React.FC = () => {
                         </div>
                     </div>
                     
-                    <div className="tool-card" onClick={() => setView('myChecklist')}><h3>📋 Action Plan</h3></div>
-                    <div className="tool-card" onClick={() => setView('taskBrainstormer')}><h3>💡 Strategy & Task Brainstorming</h3></div>
-                    <div className="tool-card" onClick={() => setView('caseJournal')}><h3>Case Timeline</h3></div>
-                    <div className="tool-card" onClick={() => setView('liveConversation')}><h3>Live Strategy Guide</h3></div>
-                    <div className="tool-card" onClick={() => setView('expenses')}><h3>Expense Tracker</h3></div>
-                    <div className="tool-card" onClick={() => setView('correspondence')}><h3>Comms HQ</h3></div>
-                    <div className="tool-card" onClick={() => setView('documentVault')}><h3>Digital Vault</h3></div>
-                    <div className="tool-card" onClick={() => setView('knowledgeBase')}><h3>Knowledge Base</h3></div>
-                    <div className="tool-card" onClick={() => setView('campaignBuilder')}><h3>Campaign Site</h3></div>
+                    <h3 className="section-title">Recovery Toolkit</h3>
+                    
+                    {/* 2. TOOL GRID */}
+                    <div className="tools-grid">
+                        <div className="tool-card" onClick={() => setView('myChecklist')}>
+                            <h3>📋 Action Plan</h3>
+                            <p>Your master checklist of legal and operational tasks.</p>
+                        </div>
+                        <div className="tool-card" onClick={() => setView('taskBrainstormer')}>
+                            <h3>💡 Strategy Chat</h3>
+                            <p>Brainstorm problems and turn worries into tasks.</p>
+                        </div>
+                        <div className="tool-card" onClick={() => setView('caseJournal')}>
+                            <h3>🗂️ Evidence Locker</h3>
+                            <p>Log calls, map documents to timeline, and export for court.</p>
+                        </div>
+                        <div className="tool-card" onClick={() => setView('liveConversation')}>
+                            <h3>🎙️ Live Strategy Guide</h3>
+                            <p>Voice-activated AI companion for crisis moments.</p>
+                        </div>
+                        <div className="tool-card" onClick={() => setView('expenses')}>
+                            <h3>💰 Expense Tracker</h3>
+                            <p>Log every dollar spent for future restitution claims.</p>
+                        </div>
+                        <div className="tool-card" onClick={() => setView('correspondence')}>
+                            <h3>📧 Comms HQ</h3>
+                            <p>Draft professional emails to FBI, State Dept, and Lawyers.</p>
+                        </div>
+                        <div className="tool-card" onClick={() => setView('documentVault')}>
+                            <h3>🔒 Digital Vault</h3>
+                            <p>Securely store and analyze court orders and reports.</p>
+                        </div>
+                        <div className="tool-card" onClick={() => setView('knowledgeBase')}>
+                            <h3>📚 Knowledge Base</h3>
+                            <p>Templates, guides, and legal resources.</p>
+                        </div>
+                        <div className="tool-card" onClick={() => setView('campaignBuilder')}>
+                            <h3>📣 Campaign Site</h3>
+                            <p>Build and host a public website to find your child.</p>
+                        </div>
+                    </div>
                 </div>
             );
             case 'myChecklist': return <MyChecklist items={items} setItems={setItems} onOpenBrainstorm={() => setView('taskBrainstormer')} />;
@@ -2531,7 +2734,7 @@ const App: React.FC = () => {
             </header>
 
             <main>
-                {caseProfile.isProfileComplete ? renderView() : (view === 'onboarding' ? renderView() : setView('onboarding'))}
+                {caseProfile.isProfileComplete ? renderView() : <OnboardingWizard onComplete={(p) => { setCaseProfile(p); setView('dashboard'); }} />}
             </main>
 
             <footer className="app-footer">
