@@ -749,6 +749,7 @@ const CaseJournal: React.FC = () => {
     const [isPolishing, setIsPolishing] = useState(false);
     const [timelineItems, setTimelineItems] = useState<any[]>([]);
     const [filter, setFilter] = useState<'all' | 'logs' | 'docs'>('all');
+    const [analyzingDoc, setAnalyzingDoc] = useState(false);
 
     useEffect(() => {
         const saved = localStorage.getItem('caseLogs');
@@ -759,8 +760,8 @@ const CaseJournal: React.FC = () => {
         localStorage.setItem('caseLogs', JSON.stringify(logs));
     }, [logs]);
 
-    useEffect(() => {
-        // Combine Logs and Docs for Unified Timeline
+    // Combine Logs and Docs for Unified Timeline
+    const fetchTimeline = () => {
         getFilesFromLocalVault().then(docs => {
              const docItems = docs.map(d => ({
                  ...d,
@@ -776,7 +777,59 @@ const CaseJournal: React.FC = () => {
              const combined = [...docItems, ...logItems].sort((a, b) => b.dateObj.getTime() - a.dateObj.getTime());
              setTimelineItems(combined);
         });
-    }, [logs]);
+    };
+
+    useEffect(() => {
+        fetchTimeline();
+    }, [logs]); // Refresh when logs change
+
+    const handleDocUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files?.[0]) {
+            setAnalyzingDoc(true);
+            const file = e.target.files[0];
+            try {
+                 const base64 = await fileToBase64(file);
+                 const prompt = `
+                 Analyze this legal document. Extract:
+                 1. "type": Document Type (Court Order, Report, etc.)
+                 2. "date": The specific date written ON the document (YYYY-MM-DD).
+                 3. "summary": One sentence summary.
+                 Return JSON.
+                 `;
+                 const result = await ai.models.generateContent({
+                    model: "gemini-2.5-flash",
+                    contents: [
+                        { inlineData: { mimeType: file.type, data: base64 } },
+                        { text: prompt }
+                    ],
+                    config: { responseMimeType: "application/json" }
+                 });
+                 const analysis = JSON.parse(result.text || "{}");
+                 const vaultDoc: VaultDocument = {
+                    id: Date.now().toString(),
+                    name: file.name,
+                    type: analysis.type || 'Evidence',
+                    date: analysis.date || new Date().toISOString().split('T')[0],
+                    summary: analysis.summary || 'Uploaded to timeline',
+                    extractedText: '',
+                    fileType: file.type,
+                    size: file.size,
+                    uploadedAt: new Date().toISOString()
+                };
+                if (auth.currentUser) {
+                    await setDoc(doc(db, `users/${auth.currentUser.uid}/documents`, vaultDoc.id), vaultDoc);
+                }
+                await saveFileToLocalVault(vaultDoc, file);
+                fetchTimeline(); // Refresh timeline
+                alert(`Analyzed & Saved: ${vaultDoc.type}`);
+            } catch (err) {
+                console.error(err);
+                alert("Analysis failed.");
+            } finally {
+                setAnalyzingDoc(false);
+            }
+        }
+    };
 
     const addLog = () => {
         const entry: LogEntry = {
@@ -865,9 +918,18 @@ const CaseJournal: React.FC = () => {
                 <input type="text" placeholder="People Involved (e.g. Officer Smith)" value={newLog.people} onChange={e => setNewLog({...newLog, people: e.target.value})} />
                 <div className="full-width">
                     <textarea placeholder="Description of event..." value={newLog.description} onChange={e => setNewLog({...newLog, description: e.target.value})} rows={3} />
-                    <button className="button-ai" onClick={polishWithAI} disabled={!newLog.description || isPolishing} style={{ marginTop: '0.5rem' }}>
-                        {isPolishing ? 'Polishing...' : '✨ Polish for Court'}
-                    </button>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '0.5rem', alignItems: 'center' }}>
+                        <button className="button-ai" onClick={polishWithAI} disabled={!newLog.description || isPolishing}>
+                            {isPolishing ? 'Polishing...' : '✨ Polish for Court'}
+                        </button>
+                        
+                        <div style={{ position: 'relative' }}>
+                            <input type="file" id="timeline-upload" style={{display:'none'}} onChange={handleDocUpload} accept=".pdf,image/*" />
+                            <label htmlFor="timeline-upload" className="button-secondary" style={{ cursor: 'pointer', fontSize: '0.85rem' }}>
+                                {analyzingDoc ? 'Analyzing...' : '➕ Upload Document'}
+                            </label>
+                        </div>
+                    </div>
                 </div>
                 <button className="button-primary full-width" onClick={addLog}>Add Entry</button>
             </div>
@@ -1024,51 +1086,48 @@ const KnowledgeBaseBuilder: React.FC = () => {
 
 const LiveGuide: React.FC = () => {
     const [connected, setConnected] = useState(false);
-    const videoRef = useRef<HTMLVideoElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const [logs, setLogs] = useState<string[]>([]);
     
-    // Audio Context Refs
     const audioContextRef = useRef<AudioContext | null>(null);
     const analyserRef = useRef<AnalyserNode | null>(null);
-    const sourceNodeRef = useRef<MediaStreamAudioSourceNode | null>(null);
+    const websocketRef = useRef<WebSocket | null>(null);
 
     const connect = async () => {
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
             
-            // Setup Audio Visualizer
             audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
             analyserRef.current = audioContextRef.current.createAnalyser();
-            sourceNodeRef.current = audioContextRef.current.createMediaStreamSource(stream);
-            sourceNodeRef.current.connect(analyserRef.current);
+            const source = audioContextRef.current.createMediaStreamSource(stream);
+            source.connect(analyserRef.current);
             drawVisualizer();
 
             const ws = new WebSocket(`wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key=${process.env.API_KEY}`);
+            websocketRef.current = ws;
             
             ws.onopen = () => {
                 setConnected(true);
-                setLogs(prev => [...prev, "Connected to Gemini Live Strategy Guide..."]);
+                setLogs(prev => [...prev, "Connected. Speak now."]);
                 ws.send(JSON.stringify({ setup: { model: "models/gemini-2.5-flash-native-audio-preview-09-2025" } }));
             };
 
             ws.onmessage = async (event) => {
                 if (event.data instanceof Blob) {
-                    // Handle audio response
-                    const arrayBuffer = await event.data.arrayBuffer();
+                     const arrayBuffer = await event.data.arrayBuffer();
                      const audioBuffer = await decodeAudioData(
                         new Uint8Array(arrayBuffer),
                         audioContextRef.current!,
                         24000,
                         1,
                     );
-                    // Play audio logic would go here (using AudioBufferSourceNode)
-                } else {
-                     // Text logic
+                    const source = audioContextRef.current!.createBufferSource();
+                    source.buffer = audioBuffer;
+                    source.connect(audioContextRef.current!.destination);
+                    source.start();
                 }
             };
 
-            // Recorder logic to send audio chunks
             const mediaRecorder = new MediaRecorder(stream);
             mediaRecorder.ondataavailable = async (e) => {
                 if (e.data.size > 0 && ws.readyState === WebSocket.OPEN) {
@@ -1085,6 +1144,14 @@ const LiveGuide: React.FC = () => {
         }
     };
 
+    const interrupt = () => {
+        // Force a turn completion or send an empty text trigger to nudge the model
+        if (websocketRef.current?.readyState === WebSocket.OPEN) {
+            websocketRef.current.send(JSON.stringify({ client_content: { turns: [{ role: "user", parts: [{ text: " " }] }], turn_complete: true } }));
+            setLogs(prev => [...prev, "Sent nudge..."]);
+        }
+    };
+
     const drawVisualizer = () => {
         if (!canvasRef.current || !analyserRef.current) return;
         const canvas = canvasRef.current;
@@ -1097,10 +1164,10 @@ const LiveGuide: React.FC = () => {
             requestAnimationFrame(draw);
             analyser.getByteTimeDomainData(dataArray);
             if (!ctx) return;
-            ctx.fillStyle = '#e1e2ec'; // Surface Variant
+            ctx.fillStyle = '#e1e2ec';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             ctx.lineWidth = 2;
-            ctx.strokeStyle = '#005ac1'; // Primary
+            ctx.strokeStyle = '#005ac1';
             ctx.beginPath();
             const sliceWidth = canvas.width * 1.0 / bufferLength;
             let x = 0;
@@ -1120,13 +1187,18 @@ const LiveGuide: React.FC = () => {
     return (
         <div className="tool-card" style={{ cursor: 'default' }}>
             <h2>Live Strategy Guide</h2>
-            <p>Speak directly with the AI to plan your next move or de-escalate a situation.</p>
+            <p>Speak directly with the AI. If it doesn't reply, tap "Push to Reply".</p>
             <canvas ref={canvasRef} className="audio-visualizer" width="600" height="100"></canvas>
-            {!connected ? (
-                <button className="button-primary" onClick={connect}>Start Voice Session</button>
-            ) : (
-                <div className="status-pill active">Listening...</div>
-            )}
+            <div style={{ display: 'flex', gap: '1rem' }}>
+                {!connected ? (
+                    <button className="button-primary" onClick={connect}>Start Voice Session</button>
+                ) : (
+                    <>
+                         <div className="status-pill active">Listening...</div>
+                         <button className="button-secondary" onClick={interrupt}>✋ Push to Reply</button>
+                    </>
+                )}
+            </div>
             <div style={{ marginTop: '1rem', maxHeight: '200px', overflowY: 'auto', fontSize: '0.9rem', color: '#666' }}>
                 {logs.map((l, i) => <div key={i}>{l}</div>)}
             </div>
@@ -1477,6 +1549,12 @@ const PublicCampaignViewer: React.FC<{ id: string, previewData?: any }> = ({ id,
     const [error, setError] = useState('');
 
     useEffect(() => {
+        if (data) {
+            document.title = `MISSING CHILD: ${data.childName} | Help Bring Them Home`;
+        }
+    }, [data]);
+
+    useEffect(() => {
         if (previewData) {
             setData(previewData);
             setLoading(false);
@@ -1520,30 +1598,36 @@ const PublicCampaignViewer: React.FC<{ id: string, previewData?: any }> = ({ id,
 
     return (
         <div className="public-campaign-container">
-            <nav style={{ padding: '1rem', textAlign: 'center', borderBottom: '1px solid #eee' }}>
-                <strong style={{ fontSize: '1.2rem', color: '#b3261e' }}>MISSING CHILD ALERT</strong>
-            </nav>
-            <div className="app-container" style={{ maxWidth: '800px', marginTop: '2rem' }}>
-                <div className="hero-content-grid" style={{ alignItems: 'center' }}>
+            <div className="missing-poster-header">
+                MISSING CHILD
+            </div>
+            
+            <div className="missing-poster-body">
+                <div className="missing-photo-container">
                     {data.photo ? (
-                         <img src={data.photo} alt="Missing Child" style={{ width: '100%', borderRadius: '16px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} />
+                         <img src={data.photo} alt={`Photo of ${data.childName}`} className="missing-photo" />
                     ) : (
-                         <div style={{ width: '100%', height: '300px', backgroundColor: '#eee', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '16px' }}>No Photo Available</div>
+                         <div className="missing-photo-placeholder">No Photo Available</div>
                     )}
-                    <div>
-                        <h1 style={{ fontSize: '2.5rem', margin: '0 0 1rem 0', lineHeight: 1.1 }}>Help Bring {data.childName} Home</h1>
-                        <p style={{ fontSize: '1.1rem', color: '#555' }}>Missing from <strong>{data.fromCountry}</strong> to <strong>{data.toCountry}</strong></p>
-                        <div style={{ backgroundColor: '#fef7ff', padding: '1.5rem', borderRadius: '12px', marginTop: '1rem' }}>
-                            <p style={{ whiteSpace: 'pre-wrap' }}>{data.story}</p>
-                        </div>
-                        
-                        <div style={{ marginTop: '2rem', backgroundColor: '#f5f5f5', padding: '1.5rem', borderRadius: '8px' }}>
-                            <h3 style={{ marginTop: 0, color: '#333' }}>Contact Info</h3>
-                            {data.contactEmail && <p style={{marginBottom: '0.5rem'}}><strong>Email:</strong> <a href={`mailto:${data.contactEmail}`}>{data.contactEmail}</a></p>}
-                            {data.contactPhone && <p style={{margin: 0}}><strong>Phone:</strong> <a href={`tel:${data.contactPhone}`}>{data.contactPhone}</a></p>}
-                            {!data.contactEmail && !data.contactPhone && <p style={{ fontStyle: 'italic', color: '#666' }}>No direct contact info provided. Please contact local authorities.</p>}
-                        </div>
-                    </div>
+                </div>
+
+                <h1 className="missing-name">{data.childName}</h1>
+                
+                <div className="missing-details-bar">
+                     <div><strong>MISSING FROM:</strong><br/>{data.fromCountry}</div>
+                     <div><strong>TAKEN TO:</strong><br/>{data.toCountry}</div>
+                     <div><strong>DATE:</strong><br/>{data.createdAt ? new Date(data.createdAt).toLocaleDateString() : 'Unknown'}</div>
+                </div>
+
+                <div className="missing-story">
+                    <p>{data.story}</p>
+                </div>
+                
+                <div className="missing-contact">
+                    <h3>IF SEEN OR LOCATED, CONTACT:</h3>
+                    {data.contactEmail && <div className="contact-line">EMAIL: {data.contactEmail}</div>}
+                    {data.contactPhone && <div className="contact-line">PHONE: {data.contactPhone}</div>}
+                    {!data.contactEmail && !data.contactPhone && <div className="contact-line">Please contact local police immediately.</div>}
                 </div>
             </div>
         </div>
@@ -1782,6 +1866,7 @@ const App: React.FC = () => {
     const [items, setItems] = useState<ActionItem[]>([]);
     const [user, setUser] = useState<User | null>(null);
     const [isGeneratingPlan, setIsGeneratingPlan] = useState(false);
+    const [showUserMenu, setShowUserMenu] = useState(false);
 
     // --- CLOUD SYNC MANAGER ---
     const syncDataToCloud = async (profile: CaseProfile, tasks: ActionItem[]) => {
@@ -1867,6 +1952,13 @@ const App: React.FC = () => {
             } else {
                 alert("Sign in failed: " + error.message);
             }
+        }
+    };
+
+    const handleSignOut = async () => {
+        if (confirm("Are you sure you want to sign out?")) {
+            await signOut(auth);
+            window.location.reload();
         }
     };
 
@@ -2026,7 +2118,13 @@ const App: React.FC = () => {
                     <a onClick={() => setView('caseSettings')}>Settings</a>
                 </nav>
                 <div className="auth-widget">
-                    {user ? <div className="user-pill"><img src={user.photoURL || ''} /> {user.displayName}</div> : <button className="button-secondary small-auth-btn" onClick={handleSignIn}>Sign In / Save Case</button>}
+                    {user ? (
+                        <div className="user-pill" onClick={() => handleSignOut()} title="Click to Sign Out">
+                            <img src={user.photoURL || ''} /> {user.displayName}
+                        </div>
+                    ) : (
+                        <button className="button-secondary small-auth-btn" onClick={handleSignIn}>Sign In / Save Case</button>
+                    )}
                 </div>
             </header>
 
