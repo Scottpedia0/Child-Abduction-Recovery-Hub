@@ -125,6 +125,23 @@ interface ChatMessage {
     suggestedTasks?: ActionItem[];
 }
 
+// --- RAG HELPER ---
+// Fetches all extracted text from documents to build context window
+const getRagContext = async (): Promise<string> => {
+    try {
+        // 1. Try Local IndexedDB first (always fastest/most up to date locally)
+        const docs = await getFilesFromLocalVault();
+        if (docs.length > 0) {
+             const context = docs.map(d => `[DOCUMENT: ${d.type} (${d.date})] \nSummary: ${d.summary} \nContent Snippet: ${d.extractedText?.substring(0, 500)}...`).join('\n\n');
+             return context ? `\n\n--- REFERENCE DOCUMENTS (RAG CONTEXT) ---\n${context}\n--------------------------------------\n` : '';
+        }
+        return '';
+    } catch (e) {
+        console.warn("RAG Fetch failed", e);
+        return '';
+    }
+}
+
 
 // --- AUDIO HELPERS for LiveConversation ---
 function encode(bytes: Uint8Array): string {
@@ -1218,6 +1235,7 @@ const CorrespondenceHelper: React.FC<{ profile: CaseProfile }> = ({ profile }) =
     const generateDraft = async () => {
         setGenerating(true);
         try {
+            const ragContext = await getRagContext();
             const prompt = `
             Draft an email as the PARENT (${profile.parentRole}).
             
@@ -1233,9 +1251,12 @@ const CorrespondenceHelper: React.FC<{ profile: CaseProfile }> = ({ profile }) =
             Goal / Additional Context / Past Email to Reply to: 
             "${context}"
             
+            ${ragContext}
+            
             Instructions:
             ${includeOverview ? "- Start with a standard paragraph stating the child's name, abduction date, and location." : "- Do NOT include the standard intro paragraph."}
             - Ensure the subject line includes Case IDs if available.
+            - USE THE REFERENCE DOCUMENTS PROVIDED (if any) to add specific dates/facts where relevant.
             - Keep it professional, clear, and action-oriented.
             `;
             
@@ -1291,7 +1312,7 @@ const CorrespondenceHelper: React.FC<{ profile: CaseProfile }> = ({ profile }) =
                 </div>
 
                 <button className="button-ai full-width" onClick={generateDraft} disabled={generating}>
-                    {generating ? 'Drafting...' : '✨ Generate Email Draft'}
+                    {generating ? 'Reading documents & Drafting...' : '✨ Generate Email Draft'}
                 </button>
             </div>
             
@@ -1375,6 +1396,12 @@ const CampaignSiteBuilder: React.FC<{ profile: CaseProfile }> = ({ profile }) =>
     
     const [email, setEmail] = useState('');
     const [phone, setPhone] = useState('');
+    
+    // New fields
+    const [missingCaseNumber, setMissingCaseNumber] = useState('');
+    const [links, setLinks] = useState<{label: string, url: string}[]>([]);
+    const [newLinkLabel, setNewLinkLabel] = useState('');
+    const [newLinkUrl, setNewLinkUrl] = useState('');
 
     useEffect(() => {
         if (auth.currentUser?.email && !email) setEmail(auth.currentUser.email);
@@ -1395,18 +1422,40 @@ const CampaignSiteBuilder: React.FC<{ profile: CaseProfile }> = ({ profile }) =>
         }
     };
 
+    const handleAddLink = () => {
+        if(newLinkLabel && newLinkUrl) {
+            setLinks([...links, { label: newLinkLabel, url: newLinkUrl.startsWith('http') ? newLinkUrl : 'https://' + newLinkUrl }]);
+            setNewLinkLabel('');
+            setNewLinkUrl('');
+        }
+    };
+    
+    const handleRemoveLink = (idx: number) => {
+        setLinks(links.filter((_, i) => i !== idx));
+    };
+
     const handleAutoDraft = async () => {
         setDrafting(true);
         try {
+             const ragContext = await getRagContext();
              const prompt = `
-             Write a compelling, emotional, but factual public statement for a missing child website.
+             Write a compelling, FACTUAL, and DIRECT public statement for a missing child website.
+             
              Child: ${profile.childName}
              Missing From: ${profile.fromCountry}
              Taken To: ${profile.toCountry}
              Date: ${profile.abductionDate}
              
-             Focus on the human element, the parent's love, and the urgent need for return. 
-             Ask for help clearly. Keep it under 250 words.
+             Reference Documents Context:
+             ${ragContext}
+             
+             Instructions:
+             - Do NOT use flowery, dramatic, or overly emotional language. 
+             - Be journalistic and urgency-driven.
+             - Include physical description if available in context.
+             - Clearly state who took them if known and safe to say.
+             - End with a clear call to action.
+             - Keep it under 300 words.
              `;
              const result = await ai.models.generateContent({
                  model: "gemini-2.5-flash",
@@ -1427,17 +1476,11 @@ const CampaignSiteBuilder: React.FC<{ profile: CaseProfile }> = ({ profile }) =>
             let dbWriteSuccess = false;
 
             if (!uid) {
-                // If not logged in, try sign in anonymously
                 try {
                     const cred = await signInAnonymously(auth);
                     uid = cred.user.uid;
                 } catch (authErr: any) {
-                    console.warn("Cloud Auth failed, failing back to Local Storage.", authErr);
-                    if (authErr.code === 'auth/configuration-not-found' || authErr.code === 'auth/unauthorized-domain') {
-                        alert(`Offline Mode: Cloud configuration missing or domain unauthorized. Saving locally. \n\nIf you are the developer, ensure ${window.location.hostname} is added to Firebase Authorized Domains.`);
-                    } else if (authErr.code === 'auth/operation-not-allowed') {
-                         alert(`Configuration Error: Anonymous Sign-In is disabled.\n\nGo to Firebase Console -> Authentication -> Sign-in method and enable 'Anonymous'.`);
-                    }
+                    console.warn("Cloud Auth failed", authErr);
                 }
             }
             
@@ -1450,11 +1493,12 @@ const CampaignSiteBuilder: React.FC<{ profile: CaseProfile }> = ({ profile }) =>
                 toCountry: profile.toCountry,
                 contactEmail: email,
                 contactPhone: phone,
+                missingCaseNumber,
+                links,
                 createdAt: new Date().toISOString(),
                 ownerUid: uid || 'local_user'
             };
 
-            // Try Firestore write if we have a UID
             if (uid) {
                 try {
                     await setDoc(doc(db, 'campaigns', id), campaignData);
@@ -1464,7 +1508,6 @@ const CampaignSiteBuilder: React.FC<{ profile: CaseProfile }> = ({ profile }) =>
                 }
             }
 
-            // Always save to Local Storage as a fallback or for local preview
             localStorage.setItem(`LOCAL_CAMPAIGN_${id}`, JSON.stringify(campaignData));
             
             const url = `${window.location.origin}?c=${id}`;
@@ -1485,7 +1528,8 @@ const CampaignSiteBuilder: React.FC<{ profile: CaseProfile }> = ({ profile }) =>
     if (showPreview) {
         const previewData = {
             childName: profile.childName,
-            story, photo, fromCountry: profile.fromCountry, toCountry: profile.toCountry, contactEmail: email, contactPhone: phone
+            story, photo, fromCountry: profile.fromCountry, toCountry: profile.toCountry, contactEmail: email, contactPhone: phone,
+            missingCaseNumber, links
         };
         return (
             <div className="tool-card">
@@ -1507,14 +1551,19 @@ const CampaignSiteBuilder: React.FC<{ profile: CaseProfile }> = ({ profile }) =>
             
             <label style={{ display: 'block', marginBottom: '0.5rem' }}><strong>1. Hero Photo</strong></label>
             <input type="file" accept="image/*" onChange={handleImageUpload} />
-            {photo && <img src={photo} style={{ width: '100px', height: '100px', objectFit: 'cover', marginTop: '0.5rem', borderRadius: '8px' }} />}
+            {photo && <img src={photo} style={{ width: '100%', maxHeight: '200px', objectFit: 'cover', marginTop: '0.5rem', borderRadius: '8px' }} />}
             
-            <label style={{ display: 'block', marginTop: '1.5rem', marginBottom: '0.5rem' }}><strong>2. Public Story</strong></label>
-            <p style={{ fontSize: '0.8rem', color: '#666' }}>Different from your legal journal. Focus on the child.</p>
+            <label style={{ display: 'block', marginTop: '1.5rem', marginBottom: '0.5rem' }}><strong>2. Public Story & Details</strong></label>
+            <p style={{ fontSize: '0.8rem', color: '#666' }}>We read your Vault documents to help draft this accurately.</p>
             <textarea placeholder="Write your public story here..." value={story} onChange={e => setStory(e.target.value)} rows={6} className="full-width" />
             <button className="button-ai" onClick={handleAutoDraft} disabled={drafting} style={{ marginTop: '0.5rem' }}>
-                {drafting ? 'Writing...' : '✨ Auto-Draft with AI'}
+                {drafting ? 'Reading Docs & Drafting...' : '✨ Auto-Draft with AI'}
             </button>
+            
+            <div style={{ marginTop: '1rem' }}>
+                <label>Missing Person Case Number (if public)</label>
+                <input type="text" value={missingCaseNumber} onChange={e => setMissingCaseNumber(e.target.value)} placeholder="e.g. NCMEC #123456" />
+            </div>
             
             <label style={{ display: 'block', marginTop: '1.5rem', marginBottom: '0.5rem' }}><strong>3. Public Contact Info (Call to Action)</strong></label>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
@@ -1522,6 +1571,21 @@ const CampaignSiteBuilder: React.FC<{ profile: CaseProfile }> = ({ profile }) =>
                 <input type="tel" placeholder="Public Phone (Optional)" value={phone} onChange={e => setPhone(e.target.value)} />
             </div>
             <p style={{ fontSize: '0.8rem', color: '#666' }}>Leave blank if you don't want to share contact info.</p>
+
+            <label style={{ display: 'block', marginTop: '1.5rem', marginBottom: '0.5rem' }}><strong>4. Useful Links (Link Tree)</strong></label>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: '0.5rem' }}>
+                <input type="text" placeholder="Label (e.g. GoFundMe)" value={newLinkLabel} onChange={e => setNewLinkLabel(e.target.value)} />
+                <input type="text" placeholder="URL (e.g. gofundme.com/...)" value={newLinkUrl} onChange={e => setNewLinkUrl(e.target.value)} />
+                <button className="button-secondary" onClick={handleAddLink}>Add</button>
+            </div>
+            <div style={{ marginTop: '0.5rem' }}>
+                {links.map((l, i) => (
+                    <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.5rem', backgroundColor: '#f0f0f0', marginBottom: '0.25rem', borderRadius: '4px' }}>
+                        <span>{l.label} ({l.url})</span>
+                        <button onClick={() => handleRemoveLink(i)} style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'red' }}>x</button>
+                    </div>
+                ))}
+            </div>
 
             <div style={{ display: 'flex', gap: '1rem', marginTop: '2rem' }}>
                 <button className="button-secondary" onClick={() => setShowPreview(true)}>Preview Site</button>
@@ -1536,7 +1600,6 @@ const CampaignSiteBuilder: React.FC<{ profile: CaseProfile }> = ({ profile }) =>
                     <div style={{ marginTop: '0.5rem' }}>
                         <a href={publishedUrl} target="_blank" style={{ fontSize: '1.1rem', fontWeight: 'bold', color: '#2e7d32' }}>{publishedUrl}</a>
                     </div>
-                    <p style={{ fontSize: '0.85rem', color: '#666', margin: '0.5rem 0 0 0' }}>Copy this link and share it.</p>
                 </div>
             )}
         </div>
@@ -1563,7 +1626,6 @@ const PublicCampaignViewer: React.FC<{ id: string, previewData?: any }> = ({ id,
         
         const fetchData = async () => {
             try {
-                // Try Firestore First
                 try {
                     const snap = await getDoc(doc(db, 'campaigns', id));
                     if (snap.exists()) {
@@ -1575,7 +1637,6 @@ const PublicCampaignViewer: React.FC<{ id: string, previewData?: any }> = ({ id,
                     console.warn("Firestore read failed, checking local storage", err);
                 }
 
-                // Fallback to Local Storage
                 const local = localStorage.getItem(`LOCAL_CAMPAIGN_${id}`);
                 if (local) {
                     setData(JSON.parse(local));
@@ -1613,6 +1674,8 @@ const PublicCampaignViewer: React.FC<{ id: string, previewData?: any }> = ({ id,
 
                 <h1 className="missing-name">{data.childName}</h1>
                 
+                {data.missingCaseNumber && <div style={{ textAlign: 'center', fontSize: '1.2rem', fontWeight: 'bold', marginBottom: '1rem', color: '#555' }}>CASE #: {data.missingCaseNumber}</div>}
+
                 <div className="missing-details-bar">
                      <div><strong>MISSING FROM:</strong><br/>{data.fromCountry}</div>
                      <div><strong>TAKEN TO:</strong><br/>{data.toCountry}</div>
@@ -1622,6 +1685,14 @@ const PublicCampaignViewer: React.FC<{ id: string, previewData?: any }> = ({ id,
                 <div className="missing-story">
                     <p>{data.story}</p>
                 </div>
+                
+                {data.links && data.links.length > 0 && (
+                    <div style={{ marginBottom: '2rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                        {data.links.map((l: any, i: number) => (
+                            <a key={i} href={l.url} target="_blank" className="button-primary full-width" style={{ textAlign: 'center', textDecoration: 'none' }}>{l.label}</a>
+                        ))}
+                    </div>
+                )}
                 
                 <div className="missing-contact">
                     <h3>IF SEEN OR LOCATED, CONTACT:</h3>
