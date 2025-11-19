@@ -33,7 +33,7 @@ interface DossierData {
     risk: 'High' | 'Medium' | 'Low';
     legalSystem: string;
     redFlags: string[];
-    lastUpdated?: string;
+    dateGenerated: string;
 }
 
 interface CaseProfile {
@@ -48,7 +48,8 @@ interface CaseProfile {
     completedActions?: string[]; 
     isProfileComplete: boolean;
     isSkipped?: boolean;
-    dossierData?: DossierData; 
+    dossierData?: DossierData; // Keep for legacy/current
+    dossierHistory?: DossierData[]; // New: History of assessments
     caseNumbers?: Record<string, string>; 
 }
 
@@ -77,8 +78,8 @@ interface LogEntry {
     description: string;
     peopleInvolved: string;
     createdAt: string;
-    isPublic?: boolean; // New: Toggle for public timeline
-    sourceDocId?: string; // New: Link to a document if this event was parsed from one
+    isPublic?: boolean; 
+    sourceDocId?: string; 
 }
 
 interface ExpenseEntry {
@@ -118,7 +119,7 @@ interface VaultDocument {
     size: number;
     uploadedAt: string;
     cloudUrl?: string;
-    isPublic?: boolean; // New: Toggle for public timeline
+    isPublic?: boolean; 
 }
 
 interface ChatMessage {
@@ -281,24 +282,39 @@ const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 // --- COMPONENTS ---
 
-const IntelligenceBriefWidget: React.FC<{ profile: CaseProfile, onRefresh: (data: DossierData) => void }> = ({ profile, onRefresh }) => {
-    // ... (Same as before, no changes needed here)
+const IntelligenceBriefWidget: React.FC<{ profile: CaseProfile, onUpdate: (d: DossierData) => void }> = ({ profile, onUpdate }) => {
     const [loading, setLoading] = useState(false);
+    const [viewIndex, setViewIndex] = useState(0);
+    
+    // History is stored in profile, newest LAST.
+    const history = profile.dossierHistory || (profile.dossierData ? [profile.dossierData] : []);
+    const currentView = history[history.length - 1 - viewIndex]; // Reverse for viewing
 
     const refreshAnalysis = async () => {
         setLoading(true);
         try {
+            // Get recent logs for context
+            const savedLogs = localStorage.getItem('caseLogs');
+            let recentContext = "No recent logs available.";
+            if (savedLogs) {
+                const logs: LogEntry[] = JSON.parse(savedLogs);
+                recentContext = logs.slice(0, 5).map(l => `- ${l.date}: ${l.description}`).join('\n');
+            }
+
             const prompt = `
-            Analyze the international child abduction case from ${profile.fromCountry} to ${profile.toCountry}.
+            Analyze the CURRENT status of this child abduction case from ${profile.fromCountry} to ${profile.toCountry}.
             Date Taken: ${profile.abductionDate}.
             
-            Provide a structured risk assessment.
+            RECENT ACTIVITY (Use this to update the assessment):
+            ${recentContext}
+            
+            Provide an updated assessment. NOT just static legal info, but a reactive summary.
             Return JSON:
             {
                 "risk": "High" | "Medium" | "Low",
-                "summary": "Brief, direct summary of the legal relationship between these countries (Hague status, etc.) and main challenges.",
-                "legalSystem": "Brief description of the destination country's legal system regarding family law.",
-                "redFlags": ["List 2-3 major red flags"]
+                "summary": "Reactive summary based on recent logs and general country status.",
+                "legalSystem": "Updates on challenges in ${profile.toCountry}.",
+                "redFlags": ["List current urgent red flags based on recent activity"]
             }
             `;
 
@@ -321,7 +337,9 @@ const IntelligenceBriefWidget: React.FC<{ profile: CaseProfile, onRefresh: (data
             });
 
             const data = JSON.parse(result.text || "{}");
-            onRefresh({ ...data, lastUpdated: new Date().toLocaleDateString() });
+            const newDossier = { ...data, dateGenerated: new Date().toLocaleString() };
+            onUpdate(newDossier);
+            setViewIndex(0); // Reset view to newest
         } catch (e) {
             console.error(e);
         } finally {
@@ -329,49 +347,52 @@ const IntelligenceBriefWidget: React.FC<{ profile: CaseProfile, onRefresh: (data
         }
     };
 
-    useEffect(() => {
-        if (!profile.dossierData && profile.fromCountry && profile.toCountry) {
-            refreshAnalysis();
-        }
-    }, []);
-
-    const d = profile.dossierData;
-
     if (loading) {
         return (
             <div className="dossier-card">
                 <div className="loading-dossier">
                     <div className="pulse-ring"></div>
-                    <div>Analyzing Intelligence...</div>
+                    <div>Analyzing Recent Activity...</div>
                 </div>
             </div>
         );
     }
 
-    if (!d) return (
+    if (history.length === 0) return (
         <div className="dossier-card">
             <button className="button-secondary" onClick={refreshAnalysis}>Initialize Intelligence Brief</button>
         </div>
     );
 
     return (
-        <div className={`dossier-card risk-${d.risk.toLowerCase()}`}>
+        <div className={`dossier-card risk-${currentView?.risk.toLowerCase() || 'medium'}`}>
             <div className="dossier-header">
-                <strong>Assessment</strong>
-                <span className="risk-badge">{d.risk} RISK</span>
+                <strong>Assessment Log</strong>
+                <span className="risk-badge">{currentView?.risk} RISK</span>
             </div>
-            <div className="dossier-summary">{d.summary}</div>
-            {d.redFlags && d.redFlags.length > 0 && (
+            
+            {history.length > 1 && (
+                <div style={{display: 'flex', justifyContent: 'space-between', marginBottom: '1rem', alignItems: 'center'}}>
+                    <button onClick={() => setViewIndex(Math.min(viewIndex + 1, history.length - 1))} disabled={viewIndex >= history.length - 1} style={{border:'none', background:'none', cursor:'pointer', fontWeight:'bold'}}>← Older</button>
+                    <span style={{fontSize: '0.8rem', color: '#555'}}>{viewIndex === 0 ? "Latest Update" : `History (${history.length - viewIndex}/${history.length})`}</span>
+                    <button onClick={() => setViewIndex(Math.max(viewIndex - 1, 0))} disabled={viewIndex === 0} style={{border:'none', background:'none', cursor:'pointer', fontWeight:'bold'}}>Newer →</button>
+                </div>
+            )}
+
+            <div className="dossier-summary">{currentView?.summary}</div>
+            {currentView?.redFlags && currentView.redFlags.length > 0 && (
                 <div style={{ fontSize: '0.85rem', marginTop: '0.5rem' }}>
-                    <strong>⚠️ Red Flags:</strong>
+                    <strong>⚠️ Current Red Flags:</strong>
                     <ul style={{ paddingLeft: '1.2rem', margin: '0.25rem 0' }}>
-                        {d.redFlags.map((f, i) => <li key={i}>{f}</li>)}
+                        {currentView.redFlags.map((f, i) => <li key={i}>{f}</li>)}
                     </ul>
                 </div>
             )}
             <div style={{ marginTop: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: '0.7rem', color: '#666' }}>Updated: {d.lastUpdated || 'Just now'}</span>
-                <button className="button-secondary" onClick={refreshAnalysis} style={{ fontSize: '0.7rem', padding: '2px 8px' }}>Refresh</button>
+                <span style={{ fontSize: '0.7rem', color: '#666' }}>Generated: {currentView?.dateGenerated}</span>
+                <button className="button-secondary" onClick={refreshAnalysis} style={{ fontSize: '0.7rem', padding: '2px 8px' }}>
+                    {viewIndex === 0 ? 'Refresh Analysis' : 'Jump to Latest'}
+                </button>
             </div>
         </div>
     );
@@ -813,6 +834,11 @@ const CaseJournal: React.FC = () => {
 
     const handleDocUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files?.[0]) {
+            if (!confirm("Should this document generate Timeline Events? OK = Yes (Timeline + Vault), Cancel = No (Vault Only)")) {
+                 // Redirect to Vault logic maybe? But for now just return and they can use Vault.
+                 alert("To store without timeline parsing, please use the 'Digital Vault' tool.");
+                 return;
+            }
             setAnalyzingDoc(true);
             const file = e.target.files[0];
             try {
@@ -903,11 +929,14 @@ const CaseJournal: React.FC = () => {
         setNewLog({ type: 'Phone Call', description: '', people: '' });
     };
 
+    const deleteLog = (id: string) => {
+        if (confirm("Delete this timeline entry?")) {
+            setLogs(logs.filter(l => l.id !== id));
+        }
+    };
+
     const togglePublic = async (id: string, isDoc: boolean, currentVal: boolean) => {
         if (isDoc) {
-             // Update Doc in Vault/DB
-             // For local demo, we just update local file metadata? 
-             // Since we re-fetch from Vault, we need to update the Vault DB.
              const db = await openVaultDB();
              const tx = db.transaction(STORE_NAME, 'readwrite');
              const store = tx.objectStore(STORE_NAME);
@@ -1006,7 +1035,7 @@ const CaseJournal: React.FC = () => {
                         <div style={{ position: 'relative' }}>
                             <input type="file" id="timeline-upload" style={{display:'none'}} onChange={handleDocUpload} accept=".pdf,image/*" />
                             <label htmlFor="timeline-upload" className="button-secondary" style={{ cursor: 'pointer', fontSize: '0.85rem' }}>
-                                {analyzingDoc ? 'Parsing Events...' : '➕ Upload Document'}
+                                {analyzingDoc ? 'Parsing Events...' : '➕ Upload & Map to Timeline'}
                             </label>
                         </div>
                     </div>
@@ -1033,21 +1062,27 @@ const CaseJournal: React.FC = () => {
                                 </span>
                                 {!isDoc && item.peopleInvolved && <span style={{ fontSize: '0.85rem', fontStyle: 'italic' }}>with {item.peopleInvolved}</span>}
                                 
-                                <button 
-                                    onClick={() => togglePublic(item.id, isDoc, isPublic)}
-                                    style={{ 
-                                        marginLeft: 'auto', 
-                                        background: 'none', 
-                                        border: 'none', 
-                                        cursor: 'pointer', 
-                                        fontSize: '1.2rem',
-                                        opacity: isPublic ? 1 : 0.3,
-                                        filter: isPublic ? 'none' : 'grayscale(100%)'
-                                    }}
-                                    title={isPublic ? "Public on Website" : "Private (Click to Publish)"}
-                                >
-                                    🌍
-                                </button>
+                                <div style={{ marginLeft: 'auto', display: 'flex', gap: '0.5rem' }}>
+                                    <button 
+                                        onClick={() => togglePublic(item.id, isDoc, isPublic)}
+                                        style={{ 
+                                            background: 'none', 
+                                            border: 'none', 
+                                            cursor: 'pointer', 
+                                            fontSize: '1.2rem',
+                                            opacity: isPublic ? 1 : 0.3,
+                                            filter: isPublic ? 'none' : 'grayscale(100%)'
+                                        }}
+                                        title={isPublic ? "Public on Website" : "Private (Click to Publish)"}
+                                    >
+                                        🌍
+                                    </button>
+                                    {!isDoc && (
+                                        <button onClick={() => deleteLog(item.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.2rem', color: '#ba1a1a' }} title="Delete Entry">
+                                            🗑️
+                                        </button>
+                                    )}
+                                </div>
                             </div>
                             <p className="journal-description">
                                 {isDoc ? (
@@ -1954,7 +1989,7 @@ const OnboardingWizard: React.FC<{ onComplete: (p: CaseProfile) => void }> = ({ 
                     
                     <div className="full-width" style={{marginTop: '1rem', display: 'flex', gap: '1rem'}}>
                         <button className="button-primary" onClick={next}>Next Step</button>
-                        <button className="button-secondary" onClick={() => onComplete({ ...data, isSkipped: true } as any)}>Skip (Professional Mode)</button>
+                        <button className="button-secondary" onClick={() => onComplete({ ...data, isSkipped: true, isProfileComplete: true } as any)}>Skip Setup</button>
                     </div>
                 </div>
             )}
@@ -2132,8 +2167,15 @@ const App: React.FC = () => {
         setView('myChecklist');
     };
     
-    const handleDossierRefresh = (d: DossierData) => {
-        setCaseProfile(prev => ({ ...prev, dossierData: d }));
+    const handleDossierUpdate = (d: DossierData) => {
+        setCaseProfile(prev => {
+            const history = prev.dossierHistory || [];
+            return { 
+                ...prev, 
+                dossierData: d, 
+                dossierHistory: [...history, d] 
+            };
+        });
     };
 
     const handleStart = async () => {
@@ -2231,7 +2273,7 @@ const App: React.FC = () => {
                         </div>
                         <div className="hero-content-grid">
                              <CriticalTasksWidget items={items} onStart={handleStart} isGenerating={isGeneratingPlan} onBrainstorm={() => setView('taskBrainstormer')} />
-                             <IntelligenceBriefWidget profile={caseProfile} onRefresh={handleDossierRefresh} />
+                             <IntelligenceBriefWidget profile={caseProfile} onUpdate={handleDossierUpdate} />
                         </div>
                         <div style={{ marginTop: '2rem', borderTop: '1px solid #e1e2ec', paddingTop: '1.5rem' }}>
                              <SimilarCasesWidget from={caseProfile.fromCountry} to={caseProfile.toCountry} />
