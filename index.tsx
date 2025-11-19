@@ -1237,6 +1237,8 @@ const CampaignSiteBuilder: React.FC<{ profile: CaseProfile }> = ({ profile }) =>
                     console.warn("Cloud Auth failed, failing back to Local Storage.", authErr);
                     if (authErr.code === 'auth/configuration-not-found' || authErr.code === 'auth/unauthorized-domain') {
                         alert(`Offline Mode: Cloud configuration missing or domain unauthorized. Saving locally. \n\nIf you are the developer, ensure ${window.location.hostname} is added to Firebase Authorized Domains.`);
+                    } else if (authErr.code === 'auth/operation-not-allowed') {
+                         alert(`Configuration Error: Anonymous Sign-In is disabled.\n\nGo to Firebase Console -> Authentication -> Sign-in method and enable 'Anonymous'.`);
                     }
                 }
             }
@@ -1650,6 +1652,8 @@ const App: React.FC = () => {
             console.error("Sign in error", error);
             if (error.code === 'auth/configuration-not-found' || error.code === 'auth/unauthorized-domain') {
                 alert(`Offline Mode: Cloud configuration missing or domain unauthorized.\n\nIf you are the developer, go to Firebase Console -> Authentication -> Settings -> Authorized Domains and add: ${window.location.hostname}`);
+            } else if (error.code === 'auth/operation-not-allowed') {
+                alert(`Configuration Error: Google Sign-In is disabled.\n\nGo to Firebase Console -> Authentication -> Sign-in method and enable 'Google'.`);
             } else {
                 alert("Sign in failed: " + error.message);
             }
