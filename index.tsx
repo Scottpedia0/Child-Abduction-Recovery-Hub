@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 import { GoogleGenAI, Type, LiveServerMessage, Modality, FunctionDeclaration } from "@google/genai";
@@ -23,16 +22,16 @@ const db = getFirestore(app);
 const auth = getAuth(app);
 
 // --- TYPES ---
-type View = 'onboarding' | 'dashboard' | 'firstSteps' | 'findKeyContacts' | 'preventionSteps' | 'liveConversation' | 'knowledgeBase' | 'termsOfService' | 'dataManagement' | 'myChecklist' | 'caseJournal' | 'expenses' | 'flyerGenerator' | 'correspondence' | 'caseSettings' | 'documentVault' | 'campaignBuilder';
+type View = 'onboarding' | 'dashboard' | 'liveConversation' | 'knowledgeBase' | 'termsOfService' | 'dataManagement' | 'myChecklist' | 'caseJournal' | 'expenses' | 'correspondence' | 'caseSettings' | 'documentVault' | 'campaignBuilder' | 'taskBrainstormer';
 type CustodyStatus = 'no-order' | 'sole-custody-me-local' | 'joint-custody-local' | 'sole-custody-them-local' | 'sole-custody-me-foreign' | 'joint-custody-foreign' | 'sole-custody-them-foreign' | 'other';
-type ParentRole = 'mother' | 'father' | 'other';
-type TranscriptEntry = { speaker: 'user' | 'model'; text: string; id: string; };
+type ParentRole = 'mother' | 'father' | 'legal-guardian' | 'other';
 
 interface DossierData {
     summary: string;
     risk: 'High' | 'Medium' | 'Low';
     legalSystem: string;
     redFlags: string[];
+    lastUpdated?: string;
 }
 
 interface CaseProfile {
@@ -40,6 +39,7 @@ interface CaseProfile {
     fromCountry: string;
     toCountry: string;
     abductionDate: string;
+    abductorRelationship?: string;
     custodyStatus: CustodyStatus;
     parentRole: ParentRole;
     isProfileComplete: boolean;
@@ -118,17 +118,10 @@ interface VaultDocument {
     uploadedAt: string;
 }
 
-interface CampaignData {
-    id?: string;
-    childName: string;
-    fromCountry: string;
-    toCountry: string;
-    abductionDate: string;
-    daysMissing: number;
-    publicStory: string;
-    contactInfo: string;
-    heroImageBase64: string | null;
-    createdAt: any;
+interface ChatMessage {
+    role: 'user' | 'ai';
+    text: string;
+    suggestedTasks?: ActionItem[];
 }
 
 
@@ -254,25 +247,107 @@ const getFilesFromVault = async (): Promise<VaultDocument[]> => {
     });
 };
 
-const getFileBlob = async (id: string): Promise<Blob | null> => {
-    const db = await openVaultDB();
-    return new Promise((resolve, reject) => {
-        const tx = db.transaction(STORE_NAME, 'readonly');
-        const store = tx.objectStore(STORE_NAME);
-        const request = store.get(id);
-        request.onsuccess = () => {
-            resolve(request.result?.blob || null);
-        };
-        request.onerror = () => reject(request.error);
-    });
-};
-
 // --- AI CLIENT ---
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 // --- COMPONENTS ---
 
-const CriticalTasksWidget: React.FC<{ items: ActionItem[], onStart: () => void }> = ({ items, onStart }) => {
+const IntelligenceBriefWidget: React.FC<{ profile: CaseProfile, onRefresh: (data: DossierData) => void }> = ({ profile, onRefresh }) => {
+    const [loading, setLoading] = useState(false);
+
+    const refreshAnalysis = async () => {
+        setLoading(true);
+        try {
+            const prompt = `
+            Analyze the international child abduction case from ${profile.fromCountry} to ${profile.toCountry}.
+            Date Taken: ${profile.abductionDate}.
+            
+            Provide a structured risk assessment.
+            Return JSON:
+            {
+                "risk": "High" | "Medium" | "Low",
+                "summary": "Brief, direct summary of the legal relationship between these countries (Hague status, etc.) and main challenges.",
+                "legalSystem": "Brief description of the destination country's legal system regarding family law.",
+                "redFlags": ["List 2-3 major red flags"]
+            }
+            `;
+
+            const result = await ai.models.generateContent({
+                model: "gemini-2.5-flash",
+                contents: prompt,
+                config: {
+                    responseMimeType: "application/json",
+                    responseSchema: {
+                        type: Type.OBJECT,
+                        properties: {
+                            risk: { type: Type.STRING },
+                            summary: { type: Type.STRING },
+                            legalSystem: { type: Type.STRING },
+                            redFlags: { type: Type.ARRAY, items: { type: Type.STRING } }
+                        },
+                        required: ["risk", "summary", "legalSystem", "redFlags"]
+                    }
+                }
+            });
+
+            const data = JSON.parse(result.text || "{}");
+            onRefresh({ ...data, lastUpdated: new Date().toLocaleDateString() });
+        } catch (e) {
+            console.error(e);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        if (!profile.dossierData && profile.fromCountry && profile.toCountry) {
+            refreshAnalysis();
+        }
+    }, []);
+
+    const d = profile.dossierData;
+
+    if (loading) {
+        return (
+            <div className="dossier-card">
+                <div className="loading-dossier">
+                    <div className="pulse-ring"></div>
+                    <div>Analyzing Intelligence...</div>
+                </div>
+            </div>
+        );
+    }
+
+    if (!d) return (
+        <div className="dossier-card">
+            <button className="button-secondary" onClick={refreshAnalysis}>Initialize Intelligence Brief</button>
+        </div>
+    );
+
+    return (
+        <div className={`dossier-card risk-${d.risk.toLowerCase()}`}>
+            <div className="dossier-header">
+                <strong>Assessment</strong>
+                <span className="risk-badge">{d.risk} RISK</span>
+            </div>
+            <div className="dossier-summary">{d.summary}</div>
+            {d.redFlags && d.redFlags.length > 0 && (
+                <div style={{ fontSize: '0.85rem', marginTop: '0.5rem' }}>
+                    <strong>⚠️ Red Flags:</strong>
+                    <ul style={{ paddingLeft: '1.2rem', margin: '0.25rem 0' }}>
+                        {d.redFlags.map((f, i) => <li key={i}>{f}</li>)}
+                    </ul>
+                </div>
+            )}
+            <div style={{ marginTop: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: '0.7rem', color: '#666' }}>Updated: {d.lastUpdated || 'Just now'}</span>
+                <button className="button-secondary" onClick={refreshAnalysis} style={{ fontSize: '0.7rem', padding: '2px 8px' }}>Refresh</button>
+            </div>
+        </div>
+    );
+};
+
+const CriticalTasksWidget: React.FC<{ items: ActionItem[], onStart: () => void, isGenerating: boolean }> = ({ items, onStart, isGenerating }) => {
     const topTasks = items.filter(i => !i.completed && (i.priority === 'Immediate' || i.priority === 'High')).slice(0, 3);
 
     if (items.length === 0) {
@@ -280,7 +355,9 @@ const CriticalTasksWidget: React.FC<{ items: ActionItem[], onStart: () => void }
             <div className="critical-tasks-empty">
                 <h4>⚠️ Action Plan Not Started</h4>
                 <p>Initialize your step-by-step recovery plan now.</p>
-                <button className="button-primary" onClick={onStart}>Generate Plan</button>
+                <button className="button-primary" onClick={onStart} disabled={isGenerating}>
+                    {isGenerating ? 'Generating Plan...' : 'Generate Plan'}
+                </button>
             </div>
         );
     }
@@ -299,7 +376,7 @@ const CriticalTasksWidget: React.FC<{ items: ActionItem[], onStart: () => void }
             <div style={{ fontSize: '0.8rem', textTransform: 'uppercase', color: '#666', marginBottom: '0.5rem' }}>Top Priorities</div>
             {topTasks.map(task => (
                 <div key={task.id} className="mini-task-card">
-                    <span className={`mini-priority ${task.priority.toLowerCase()}`}>{task.priority}</span>
+                    <span className="mini-priority immediate">{task.priority}</span>
                     <span className="mini-task-text">{task.task}</span>
                 </div>
             ))}
@@ -354,95 +431,157 @@ const SimilarCasesWidget: React.FC<{ from: string, to: string }> = ({ from, to }
     return (
         <div className="similar-cases-widget">
             <div className="section-header">Related Stories found in Search</div>
-            {stories.map((s, i) => (
-                <a key={i} href={s.url} target="_blank" rel="noopener noreferrer" className="story-link-card">
-                    <div className="story-title">{s.title}</div>
-                    <div className="story-source">{s.source}</div>
-                </a>
-            ))}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1rem' }}>
+                {stories.map((s, i) => (
+                    <a key={i} href={s.url} target="_blank" rel="noopener noreferrer" className="story-link-card">
+                        <div className="story-title">{s.title}</div>
+                        <div className="story-source">{s.source}</div>
+                    </a>
+                ))}
+            </div>
         </div>
     );
 };
 
-const FlyerGenerator: React.FC<{ profile: CaseProfile }> = ({ profile }) => {
-    const [photo, setPhoto] = useState<string | null>(null);
-    const [details, setDetails] = useState({
-        height: '',
-        weight: '',
-        eyes: '',
-        hair: '',
-        lastSeen: '',
-        notes: ''
-    });
-    const flyerRef = useRef<HTMLDivElement>(null);
+const TaskBrainstormer: React.FC<{ profile: CaseProfile, onAddTask: (task: ActionItem) => void }> = ({ profile, onAddTask }) => {
+    const [input, setInput] = useState('');
+    const [messages, setMessages] = useState<ChatMessage[]>([]);
+    const [loading, setLoading] = useState(false);
 
-    const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (e.target.files && e.target.files[0]) {
-            const base64 = await fileToBase64(e.target.files[0]);
-            setPhoto(base64);
+    const handleSend = async () => {
+        if (!input.trim()) return;
+        const userMsg: ChatMessage = { role: 'user', text: input };
+        setMessages(prev => [...prev, userMsg]);
+        setInput('');
+        setLoading(true);
+
+        try {
+            const prompt = `
+            You are a strategic advisor for a parent whose child has been abducted from ${profile.fromCountry} to ${profile.toCountry}.
+            The parent has a concern: "${userMsg.text}".
+            
+            1. Validate their concern briefly.
+            2. Suggest 1-2 concrete, actionable tasks they can do to address this specific concern.
+            
+            Return JSON:
+            {
+                "reply": "Your conversational reply here...",
+                "suggestedTasks": [
+                    { "category": "Legal/Prevention/Logistics", "task": "Title of task", "description": "Short description", "priority": "High/Medium" }
+                ]
+            }
+            `;
+
+            const result = await ai.models.generateContent({
+                model: "gemini-2.5-flash",
+                contents: prompt,
+                config: {
+                    responseMimeType: "application/json",
+                    responseSchema: {
+                        type: Type.OBJECT,
+                        properties: {
+                            reply: { type: Type.STRING },
+                            suggestedTasks: {
+                                type: Type.ARRAY,
+                                items: {
+                                    type: Type.OBJECT,
+                                    properties: {
+                                        category: { type: Type.STRING },
+                                        task: { type: Type.STRING },
+                                        description: { type: Type.STRING },
+                                        priority: { type: Type.STRING }
+                                    },
+                                    required: ["category", "task", "description", "priority"]
+                                }
+                            }
+                        },
+                        required: ["reply", "suggestedTasks"]
+                    }
+                }
+            });
+
+            const data = JSON.parse(result.text || "{}");
+            const aiMsg: ChatMessage = {
+                role: 'ai',
+                text: data.reply,
+                suggestedTasks: data.suggestedTasks?.map((t: any, i: number) => ({
+                    id: Date.now() + i.toString(),
+                    ...t,
+                    completed: false
+                }))
+            };
+            setMessages(prev => [...prev, aiMsg]);
+        } catch (e) {
+            console.error(e);
+            setMessages(prev => [...prev, { role: 'ai', text: "I'm having trouble connecting. Please try again." }]);
+        } finally {
+            setLoading(false);
         }
     };
 
-    const downloadFlyer = async () => {
-        if (!flyerRef.current) return;
-        const canvas = await html2canvas(flyerRef.current);
-        const imgData = canvas.toDataURL('image/png');
-        const pdf = new jsPDF('p', 'mm', 'a4');
-        const pdfWidth = pdf.internal.pageSize.getWidth();
-        const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
-        pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-        pdf.save(`MISSING_${profile.childName.replace(/\s/g, '_')}.pdf`);
-    };
-
     return (
-        <div className="tool-card" style={{ cursor: 'default' }}>
-            <h2>Missing Person Flyer Generator</h2>
-            <div className="form-grid">
-                <input type="file" accept="image/*" onChange={handlePhotoUpload} />
-                <input type="text" placeholder="Height (e.g. 3'5)" value={details.height} onChange={e => setDetails({...details, height: e.target.value})} />
-                <input type="text" placeholder="Weight (e.g. 40 lbs)" value={details.weight} onChange={e => setDetails({...details, weight: e.target.value})} />
-                <input type="text" placeholder="Eye Color" value={details.eyes} onChange={e => setDetails({...details, eyes: e.target.value})} />
-                <input type="text" placeholder="Hair Color" value={details.hair} onChange={e => setDetails({...details, hair: e.target.value})} />
-                <input type="text" placeholder="Last Seen Location" value={details.lastSeen} onChange={e => setDetails({...details, lastSeen: e.target.value})} />
-                <textarea placeholder="Distinguishing Marks / Notes" value={details.notes} onChange={e => setDetails({...details, notes: e.target.value})} className="full-width" />
-            </div>
+        <div className="tool-card" style={{ cursor: 'default', height: '600px', display: 'flex', flexDirection: 'column' }}>
+            <h2>Strategy Chat & Brainstorming</h2>
+            <p>Tell me what you're worried about (e.g., "I think they'll move cities" or "I'm out of money"). I'll help you turn that worry into a plan.</p>
             
-            <button className="button-primary" onClick={downloadFlyer}>Download PDF</button>
+            <div style={{ flexGrow: 1, overflowY: 'auto', padding: '1rem', backgroundColor: '#f8f9fa', borderRadius: '8px', marginBottom: '1rem' }}>
+                {messages.map((m, i) => (
+                    <div key={i} style={{ marginBottom: '1rem', alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start' }}>
+                        <div style={{ 
+                            backgroundColor: m.role === 'user' ? '#e1f5fe' : 'white', 
+                            padding: '1rem', 
+                            borderRadius: '8px',
+                            border: '1px solid #eee',
+                            maxWidth: '80%'
+                        }}>
+                            <strong>{m.role === 'user' ? 'You' : 'Guide'}: </strong> {m.text}
+                            
+                            {m.suggestedTasks && m.suggestedTasks.length > 0 && (
+                                <div style={{ marginTop: '0.5rem', borderTop: '1px solid #eee', paddingTop: '0.5rem' }}>
+                                    <div style={{ fontSize: '0.8rem', color: '#666', marginBottom: '0.5rem' }}>SUGGESTED ACTIONS:</div>
+                                    {m.suggestedTasks.map(t => (
+                                        <div key={t.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem', backgroundColor: '#f1f8e9', padding: '0.5rem', borderRadius: '4px' }}>
+                                            <div>
+                                                <div style={{ fontWeight: 'bold', fontSize: '0.9rem' }}>{t.task}</div>
+                                                <div style={{ fontSize: '0.8rem' }}>{t.description}</div>
+                                            </div>
+                                            <button className="button-secondary" style={{ fontSize: '0.8rem', padding: '0.2rem 0.5rem' }} onClick={() => onAddTask(t)}>
+                                                + Add
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                ))}
+                {loading && <div style={{ fontStyle: 'italic', color: '#666' }}>Thinking...</div>}
+            </div>
 
-            <div style={{ marginTop: '2rem', border: '1px solid #ddd', padding: '1rem', overflow: 'auto' }}>
-                <div ref={flyerRef} className="flyer-preview">
-                    <div className="flyer-header">MISSING</div>
-                    <div className="flyer-photo-area">
-                        {photo ? <img src={`data:image/png;base64,${photo}`} alt="Missing Child" /> : <span>PHOTO</span>}
-                    </div>
-                    <div className="flyer-name">{profile.childName || "CHILD NAME"}</div>
-                    <div className="flyer-details-grid">
-                        <div><strong>DOB:</strong> [Date]</div>
-                        <div><strong>Height:</strong> {details.height}</div>
-                        <div><strong>Weight:</strong> {details.weight}</div>
-                        <div><strong>Eyes:</strong> {details.eyes}</div>
-                        <div><strong>Hair:</strong> {details.hair}</div>
-                        <div><strong>Missing From:</strong> {details.lastSeen}</div>
-                    </div>
-                    <div className="flyer-section">
-                        <strong>Circumstances:</strong> {details.notes || "Alleged abduction by non-custodial parent."}
-                    </div>
-                    <div className="flyer-footer">
-                        IF SEEN CALL 911
-                    </div>
-                </div>
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <input 
+                    type="text" 
+                    value={input} 
+                    onChange={e => setInput(e.target.value)} 
+                    onKeyDown={e => e.key === 'Enter' && handleSend()}
+                    placeholder="Type your concern here..." 
+                />
+                <button className="button-primary" onClick={handleSend}>Send</button>
             </div>
         </div>
     );
 };
 
-const MyChecklist: React.FC<{ items: ActionItem[]; setItems: React.Dispatch<React.SetStateAction<ActionItem[]>> }> = ({ items, setItems }) => {
+const MyChecklist: React.FC<{ items: ActionItem[]; setItems: React.Dispatch<React.SetStateAction<ActionItem[]>>; onOpenBrainstorm: () => void }> = ({ items, setItems, onOpenBrainstorm }) => {
     const toggleItem = (id: string) => {
         setItems(prev => prev.map(i => i.id === id ? { ...i, completed: !i.completed } : i));
     };
     return (
         <div className="tool-card" style={{ cursor: 'default' }}>
-            <h2>Universal Action Plan</h2>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <h2>Universal Action Plan</h2>
+                <button className="button-secondary" onClick={onOpenBrainstorm}>💡 Brainstorm Tasks</button>
+            </div>
             <div className="items-list">
                 {items.map(item => (
                     <div key={item.id} className={`action-item ${item.completed ? 'completed' : ''}`}>
@@ -466,6 +605,8 @@ const CaseJournal: React.FC = () => {
     const [logs, setLogs] = useState<LogEntry[]>([]);
     const [newLog, setNewLog] = useState<{ type: string; description: string; people: string }>({ type: 'Phone Call', description: '', people: '' });
     const [isPolishing, setIsPolishing] = useState(false);
+    const [timelineItems, setTimelineItems] = useState<any[]>([]);
+    const [filter, setFilter] = useState<'all' | 'logs' | 'docs'>('all');
 
     useEffect(() => {
         const saved = localStorage.getItem('caseLogs');
@@ -474,6 +615,25 @@ const CaseJournal: React.FC = () => {
 
     useEffect(() => {
         localStorage.setItem('caseLogs', JSON.stringify(logs));
+    }, [logs]);
+
+    useEffect(() => {
+        // Combine Logs and Docs for Unified Timeline
+        getFilesFromVault().then(docs => {
+             const docItems = docs.map(d => ({
+                 ...d,
+                 timelineType: 'doc',
+                 dateObj: new Date(d.date || d.uploadedAt)
+             }));
+             const logItems = logs.map(l => ({
+                 ...l,
+                 timelineType: 'log',
+                 dateObj: new Date(l.date + ' ' + l.time)
+             }));
+
+             const combined = [...docItems, ...logItems].sort((a, b) => b.dateObj.getTime() - a.dateObj.getTime());
+             setTimelineItems(combined);
+        });
     }, [logs]);
 
     const addLog = () => {
@@ -513,11 +673,18 @@ const CaseJournal: React.FC = () => {
         doc.setFontSize(16);
         doc.text("Case Timeline & Evidence Log", 10, 10);
         let y = 20;
-        logs.forEach(log => {
+        timelineItems.forEach(item => {
+            if (filter === 'logs' && item.timelineType !== 'log') return;
+            if (filter === 'docs' && item.timelineType !== 'doc') return;
+
             doc.setFontSize(10);
-            doc.text(`${log.date} ${log.time} - ${log.type}`, 10, y);
+            const dateStr = item.timelineType === 'log' ? `${item.date} ${item.time}` : new Date(item.date).toLocaleDateString();
+            const typeStr = item.timelineType === 'log' ? item.type : `DOCUMENT: ${item.type}`;
+            
+            doc.text(`${dateStr} - ${typeStr}`, 10, y);
             y += 5;
-            const lines = doc.splitTextToSize(log.description, 180);
+            const desc = item.timelineType === 'log' ? item.description : `File: ${item.name}. Summary: ${item.summary}`;
+            const lines = doc.splitTextToSize(desc, 180);
             doc.text(lines, 10, y);
             y += (lines.length * 5) + 5;
         });
@@ -527,11 +694,19 @@ const CaseJournal: React.FC = () => {
     return (
         <div className="tool-card" style={{ cursor: 'default' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <h2>Evidence Locker</h2>
-                <button className="button-secondary" onClick={exportPDF}>Export PDF</button>
+                <h2>Case Timeline (Evidence Locker)</h2>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    <select value={filter} onChange={(e: any) => setFilter(e.target.value)} style={{ padding: '0.5rem', fontSize: '0.9rem' }}>
+                        <option value="all">Show All</option>
+                        <option value="logs">Logs Only</option>
+                        <option value="docs">Documents Only</option>
+                    </select>
+                    <button className="button-secondary" onClick={exportPDF}>Export PDF</button>
+                </div>
             </div>
 
-            <div className="form-grid" style={{ backgroundColor: '#f8f9fa', padding: '1rem', borderRadius: '8px' }}>
+            <div className="form-grid" style={{ backgroundColor: '#f8f9fa', padding: '1rem', borderRadius: '8px', marginBottom: '2rem' }}>
+                <h4 style={{ margin: '0 0 0.5rem 0' }}>Add New Event Log</h4>
                 <select value={newLog.type} onChange={e => setNewLog({...newLog, type: e.target.value})}>
                     <option>Phone Call</option>
                     <option>Email</option>
@@ -551,16 +726,35 @@ const CaseJournal: React.FC = () => {
             </div>
 
             <div className="journal-timeline">
-                {logs.map(log => (
-                    <div key={log.id} className="journal-entry">
-                        <div className="journal-meta">
-                            <span className="journal-badge">{log.type}</span>
-                            <span style={{ fontSize: '0.85rem', color: '#666' }}>{log.date} at {log.time}</span>
-                            {log.peopleInvolved && <span style={{ fontSize: '0.85rem', fontStyle: 'italic' }}>with {log.peopleInvolved}</span>}
+                {timelineItems.map((item, i) => {
+                    if (filter === 'logs' && item.timelineType !== 'log') return null;
+                    if (filter === 'docs' && item.timelineType !== 'doc') return null;
+
+                    const isDoc = item.timelineType === 'doc';
+
+                    return (
+                        <div key={item.id || i} className="journal-entry" style={{ borderLeft: isDoc ? '4px solid #715573' : '1px solid #e1e2ec' }}>
+                            <div className="journal-meta">
+                                <span className="journal-badge" style={{ backgroundColor: isDoc ? '#fbd7fc' : '#dbe2f9', color: isDoc ? '#29132d' : '#141b2c' }}>
+                                    {isDoc ? `📄 ${item.type}` : item.type}
+                                </span>
+                                <span style={{ fontSize: '0.85rem', color: '#666' }}>
+                                    {isDoc ? new Date(item.date).toLocaleDateString() : `${item.date} at ${item.time}`}
+                                </span>
+                                {!isDoc && item.peopleInvolved && <span style={{ fontSize: '0.85rem', fontStyle: 'italic' }}>with {item.peopleInvolved}</span>}
+                            </div>
+                            <p className="journal-description">
+                                {isDoc ? (
+                                    <>
+                                        <strong>{item.name}</strong>
+                                        <br/>
+                                        {item.summary}
+                                    </>
+                                ) : item.description}
+                            </p>
                         </div>
-                        <p className="journal-description">{log.description}</p>
-                    </div>
-                ))}
+                    );
+                })}
             </div>
         </div>
     );
@@ -694,7 +888,7 @@ const LiveGuide: React.FC = () => {
             ws.onopen = () => {
                 setConnected(true);
                 setLogs(prev => [...prev, "Connected to Gemini Live Strategy Guide..."]);
-                ws.send(JSON.stringify({ setup: { model: "models/gemini-2.0-flash-exp" } }));
+                ws.send(JSON.stringify({ setup: { model: "models/gemini-2.5-flash-native-audio-preview-09-2025" } }));
             };
 
             ws.onmessage = async (event) => {
@@ -903,20 +1097,72 @@ const DocumentVault: React.FC = () => {
 
 const CampaignSiteBuilder: React.FC<{ profile: CaseProfile }> = ({ profile }) => {
     const [story, setStory] = useState('');
+    const [photo, setPhoto] = useState<string | null>(null);
     const [publishedUrl, setPublishedUrl] = useState<string | null>(null);
+    const [loading, setLoading] = useState(false);
+
+    useEffect(() => {
+        if (profile.childName) {
+            // Pre-fill some basic text
+            const defaultStory = `${profile.childName} was taken on ${profile.abductionDate}. Please help us find them.`;
+            if (!story) setStory(defaultStory);
+        }
+    }, [profile]);
+
+    const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files?.[0]) {
+            try {
+                const base64 = await fileToBase64(e.target.files[0]);
+                const compressed = await resizeImage(base64);
+                setPhoto(compressed);
+            } catch (err) {
+                console.error(err);
+            }
+        }
+    };
 
     const publish = async () => {
-        // In real app, save to Firestore 'campaigns' collection
-        const id = 'DEMO_' + Date.now();
-        setPublishedUrl(`${window.location.origin}?c=${id}`);
+        if (!auth.currentUser) {
+            alert("You must be signed in to publish a public website.");
+            return;
+        }
+        setLoading(true);
+        try {
+            const id = 'CASE_' + Date.now();
+            await setDoc(doc(db, 'campaigns', id), {
+                childName: profile.childName,
+                story: story,
+                photo: photo,
+                fromCountry: profile.fromCountry,
+                toCountry: profile.toCountry,
+                contactEmail: auth.currentUser.email,
+                createdAt: new Date().toISOString()
+            });
+            setPublishedUrl(`${window.location.origin}?c=${id}`);
+        } catch (e) {
+            console.error(e);
+            alert("Failed to publish. Try again.");
+        } finally {
+            setLoading(false);
+        }
     };
 
     return (
         <div className="tool-card" style={{ cursor: 'default' }}>
             <h2>Campaign Website Builder</h2>
             <p>Create a public page to share your story.</p>
+            
+            <label style={{ display: 'block', marginBottom: '0.5rem' }}>Hero Photo</label>
+            <input type="file" accept="image/*" onChange={handleImageUpload} />
+            {photo && <img src={photo} style={{ width: '100px', height: '100px', objectFit: 'cover', marginTop: '0.5rem', borderRadius: '8px' }} />}
+            
+            <label style={{ display: 'block', marginTop: '1rem', marginBottom: '0.5rem' }}>Public Story</label>
             <textarea placeholder="Write your public story here..." value={story} onChange={e => setStory(e.target.value)} rows={6} className="full-width" />
-            <button className="button-primary" onClick={publish}>Publish to Web</button>
+            
+            <button className="button-primary" onClick={publish} disabled={loading} style={{ marginTop: '1rem' }}>
+                {loading ? 'Publishing...' : 'Publish to Web'}
+            </button>
+            
             {publishedUrl && (
                 <div style={{ marginTop: '1rem', padding: '1rem', backgroundColor: '#e8f5e9' }}>
                     <strong>Live Link:</strong> <a href={publishedUrl} target="_blank">{publishedUrl}</a>
@@ -927,15 +1173,53 @@ const CampaignSiteBuilder: React.FC<{ profile: CaseProfile }> = ({ profile }) =>
 };
 
 const PublicCampaignViewer: React.FC<{ id: string }> = ({ id }) => {
+    const [data, setData] = useState<any>(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+
+    useEffect(() => {
+        const fetchData = async () => {
+            try {
+                const snap = await getDoc(doc(db, 'campaigns', id));
+                if (snap.exists()) {
+                    setData(snap.data());
+                } else {
+                    setError("Campaign not found.");
+                }
+            } catch (e) {
+                console.error(e);
+                setError("Could not load campaign.");
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchData();
+    }, [id]);
+
+    if (loading) return <div style={{ padding: '2rem', textAlign: 'center' }}>Loading Campaign...</div>;
+    if (error) return <div style={{ padding: '2rem', textAlign: 'center', color: 'red' }}>{error}</div>;
+
     return (
         <div className="public-campaign-container">
-            <div className="app-container">
-                <h1>Bring Them Home</h1>
-                <p>Campaign ID: {id}</p>
-                <div className="hero-content-grid">
-                    <div className="cta-box">
-                        <h2>MISSING CHILD ALERT</h2>
-                        <p>Please help us find our child.</p>
+            <nav style={{ padding: '1rem', textAlign: 'center', borderBottom: '1px solid #eee' }}>
+                <strong style={{ fontSize: '1.2rem', color: '#b3261e' }}>MISSING CHILD ALERT</strong>
+            </nav>
+            <div className="app-container" style={{ maxWidth: '800px', marginTop: '2rem' }}>
+                <div className="hero-content-grid" style={{ alignItems: 'center' }}>
+                    {data.photo ? (
+                         <img src={data.photo} alt="Missing Child" style={{ width: '100%', borderRadius: '16px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} />
+                    ) : (
+                         <div style={{ width: '100%', height: '300px', backgroundColor: '#eee', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>No Photo Available</div>
+                    )}
+                    <div>
+                        <h1 style={{ fontSize: '2.5rem', margin: '0 0 1rem 0', lineHeight: 1.1 }}>Bring {data.childName} Home</h1>
+                        <p style={{ fontSize: '1.1rem', color: '#555' }}>Missing from <strong>{data.fromCountry}</strong> to <strong>{data.toCountry}</strong></p>
+                        <div style={{ backgroundColor: '#fef7ff', padding: '1.5rem', borderRadius: '12px', marginTop: '1rem' }}>
+                            <p style={{ whiteSpace: 'pre-wrap' }}>{data.story}</p>
+                        </div>
+                        <div style={{ marginTop: '2rem' }}>
+                            <button className="button-primary" onClick={() => window.location.href = `mailto:${data.contactEmail}`}>Contact Family</button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -984,20 +1268,72 @@ const OnboardingWizard: React.FC<{ onComplete: (p: CaseProfile) => void }> = ({ 
         <div className="tool-card">
             <h2>Case Setup Wizard</h2>
             {step === 0 && (
-                <div>
-                    <label>Child's Name</label>
-                    <input type="text" value={data.childName || ''} onChange={e => setData({...data, childName: e.target.value})} />
-                    <button className="button-primary" onClick={next} style={{ marginTop: '1rem' }}>Next</button>
-                    <button className="button-secondary" onClick={() => onComplete({ ...data, isSkipped: true } as any)}>Skip (Professional Mode)</button>
+                <div className="form-grid">
+                    <div>
+                        <label>Child's Name</label>
+                        <input type="text" value={data.childName || ''} onChange={e => setData({...data, childName: e.target.value})} />
+                    </div>
+                    
+                    <div>
+                        <label>Your Role</label>
+                        <select value={data.parentRole || 'mother'} onChange={e => setData({...data, parentRole: e.target.value as any})}>
+                            <option value="mother">Mother</option>
+                            <option value="father">Father</option>
+                            <option value="legal-guardian">Legal Guardian</option>
+                            <option value="other">Other</option>
+                        </select>
+                    </div>
+
+                    <div className="full-width">
+                         <label>Legal Custody Status (Before Taking)</label>
+                         <select value={data.custodyStatus || 'no-order'} onChange={e => setData({...data, custodyStatus: e.target.value as any})}>
+                            <option value="no-order">No Court Order Exists</option>
+                            <option value="sole-custody-me-local">I have Sole Custody</option>
+                            <option value="joint-custody-local">We have Joint Custody</option>
+                            <option value="sole-custody-them-local">They have Sole Custody (Retained/Taken by Custodial Parent)</option>
+                            <option value="other">Other / Unclear</option>
+                         </select>
+                         <p style={{fontSize: '0.8rem', color: '#666', marginTop: '0.2rem'}}>Select the status in the country the child was taken FROM.</p>
+                    </div>
+                    
+                    <div className="full-width" style={{marginTop: '1rem', display: 'flex', gap: '1rem'}}>
+                        <button className="button-primary" onClick={next}>Next Step</button>
+                        <button className="button-secondary" onClick={() => onComplete({ ...data, isSkipped: true } as any)}>Skip (Professional Mode)</button>
+                    </div>
                 </div>
             )}
             {step === 1 && (
-                <div>
-                    <label>From Country</label>
-                    <input type="text" value={data.fromCountry || ''} onChange={e => setData({...data, fromCountry: e.target.value})} />
-                    <label>To Country</label>
-                    <input type="text" value={data.toCountry || ''} onChange={e => setData({...data, toCountry: e.target.value})} />
-                    <button className="button-primary" onClick={() => onComplete({ ...data, isProfileComplete: true } as any)} style={{ marginTop: '1rem' }}>Finish</button>
+                <div className="form-grid">
+                    <div>
+                        <label>Missing From (Country)</label>
+                        <input type="text" value={data.fromCountry || ''} onChange={e => setData({...data, fromCountry: e.target.value})} />
+                    </div>
+                    <div>
+                        <label>Taken To (Country)</label>
+                        <input type="text" value={data.toCountry || ''} onChange={e => setData({...data, toCountry: e.target.value})} />
+                    </div>
+                    
+                    <div>
+                        <label>Date Taken</label>
+                        <input type="date" value={data.abductionDate || ''} onChange={e => setData({...data, abductionDate: e.target.value})} />
+                    </div>
+                    
+                    <div>
+                        <label>Who took them?</label>
+                        <select value={data.abductorRelationship || ''} onChange={e => setData({...data, abductorRelationship: e.target.value})}>
+                            <option value="">Select Relationship</option>
+                            <option value="Mother">Mother</option>
+                            <option value="Father">Father</option>
+                            <option value="Grandparent">Grandparent</option>
+                            <option value="Relative">Other Relative</option>
+                            <option value="Stranger">Stranger/Unknown</option>
+                        </select>
+                    </div>
+
+                    <div className="full-width" style={{marginTop: '1rem'}}>
+                        <button className="button-primary full-width" onClick={() => onComplete({ ...data, isProfileComplete: true } as any)}>Finish Setup & Build Plan</button>
+                        <button className="button-secondary" onClick={() => setStep(0)} style={{marginTop: '0.5rem', width: '100%', border: 'none'}}>Back</button>
+                    </div>
                 </div>
             )}
         </div>
@@ -1014,12 +1350,16 @@ const App: React.FC = () => {
     });
     const [items, setItems] = useState<ActionItem[]>([]);
     const [user, setUser] = useState<User | null>(null);
+    const [isGeneratingPlan, setIsGeneratingPlan] = useState(false);
 
     // Restore session from local storage or Auth
     useEffect(() => {
         const saved = localStorage.getItem('recoveryHubProfile');
         if (saved) setCaseProfile(JSON.parse(saved));
         
+        const savedItems = localStorage.getItem('recoveryHubItems');
+        if (savedItems) setItems(JSON.parse(savedItems));
+
         const unsubscribe = onAuthStateChanged(auth, (u) => {
             setUser(u);
             // Here we would sync with Firestore if user is logged in
@@ -1031,9 +1371,82 @@ const App: React.FC = () => {
         if (caseProfile.isProfileComplete) localStorage.setItem('recoveryHubProfile', JSON.stringify(caseProfile));
     }, [caseProfile]);
 
-    const handleStart = () => {
-        // Generate logic would go here
-        setItems([{ id: '1', category: 'Legal', task: 'File Police Report', description: 'Go to local station.', priority: 'Immediate', completed: false }]);
+    useEffect(() => {
+        if (items.length > 0) localStorage.setItem('recoveryHubItems', JSON.stringify(items));
+    }, [items]);
+
+    const handleAddTask = (newTask: ActionItem) => {
+        setItems(prev => [newTask, ...prev]);
+        setView('myChecklist');
+    };
+    
+    const handleDossierRefresh = (d: DossierData) => {
+        setCaseProfile(prev => ({ ...prev, dossierData: d }));
+    };
+
+    const handleStart = async () => {
+        setIsGeneratingPlan(true);
+        try {
+            const prompt = `
+            Act as an expert international family law strategist. Create a detailed, comprehensive Checklist of Action Items for a parent whose child has just been abducted internationally.
+            
+            Context:
+            - Child: ${caseProfile.childName}
+            - Missing From: ${caseProfile.fromCountry}
+            - Taken To: ${caseProfile.toCountry}
+            - Time Missing: ${caseProfile.abductionDate}
+            - Custody: ${caseProfile.custodyStatus}
+            
+            Generate 12-15 distinct, actionable tasks.
+            Prioritize them strictly:
+            - "Immediate": Critical first 24-48 hour actions (Police, Border Agencies).
+            - "High": First week legal actions (Hague application, Lawyer retention).
+            - "Medium": Evidence gathering and logistical support.
+            - "Low": Long-term administrative tasks.
+            `;
+
+            const result = await ai.models.generateContent({
+                model: "gemini-2.5-flash",
+                contents: prompt,
+                config: {
+                    responseMimeType: "application/json",
+                    responseSchema: {
+                        type: Type.ARRAY,
+                        items: {
+                            type: Type.OBJECT,
+                            properties: {
+                                category: { type: Type.STRING },
+                                task: { type: Type.STRING },
+                                description: { type: Type.STRING },
+                                priority: { type: Type.STRING }
+                            },
+                            required: ["category", "task", "description", "priority"]
+                        }
+                    }
+                }
+            });
+            
+            const text = result.text;
+            if (text) {
+                const tasks = JSON.parse(text);
+                const formattedTasks: ActionItem[] = tasks.map((t: any, i: number) => ({
+                    id: Date.now().toString() + i,
+                    category: t.category,
+                    task: t.task,
+                    description: t.description,
+                    priority: t.priority,
+                    completed: false
+                }));
+                setItems(formattedTasks);
+                setView('myChecklist');
+            }
+        } catch (e) {
+            console.error("Failed to generate plan", e);
+            // Fallback only if AI fails completely
+            setItems([{ id: '1', category: 'Legal', task: 'File Police Report', description: 'Go to local station immediately.', priority: 'Immediate', completed: false }]);
+        } finally {
+            setIsGeneratingPlan(false);
+        }
     };
 
     // Check for Public Campaign URL
@@ -1055,27 +1468,31 @@ const App: React.FC = () => {
                 <div className="tools-grid">
                     <div className="dashboard-hero full-width">
                         <div className="hero-top-bar">
-                            <div className="day-counter">DAY {Math.floor((new Date().getTime() - new Date(caseProfile.abductionDate || new Date()).getTime()) / (1000 * 3600 * 24))} OF RECOVERY</div>
+                            <div className="day-counter">DAY {caseProfile.abductionDate ? Math.floor((new Date().getTime() - new Date(caseProfile.abductionDate).getTime()) / (1000 * 3600 * 24)) : 0} OF RECOVERY</div>
                             <div className="status-pill active">ACTIVE CASE</div>
                         </div>
                         <div className="hero-content-grid">
-                             <CriticalTasksWidget items={items} onStart={handleStart} />
+                             <CriticalTasksWidget items={items} onStart={handleStart} isGenerating={isGeneratingPlan} />
+                             <IntelligenceBriefWidget profile={caseProfile} onRefresh={handleDossierRefresh} />
+                        </div>
+                        <div style={{ marginTop: '2rem', borderTop: '1px solid #e1e2ec', paddingTop: '1.5rem' }}>
                              <SimilarCasesWidget from={caseProfile.fromCountry} to={caseProfile.toCountry} />
                         </div>
                     </div>
                     
                     <div className="tool-card" onClick={() => setView('myChecklist')}><h3>📋 Action Plan</h3></div>
-                    <div className="tool-card" onClick={() => setView('caseJournal')}><h3>Evidence Locker</h3></div>
+                    <div className="tool-card" onClick={() => setView('taskBrainstormer')}><h3>💡 Strategy Chat</h3></div>
+                    <div className="tool-card" onClick={() => setView('caseJournal')}><h3>Case Timeline</h3></div>
                     <div className="tool-card" onClick={() => setView('liveConversation')}><h3>Live Strategy Guide</h3></div>
                     <div className="tool-card" onClick={() => setView('expenses')}><h3>Expense Tracker</h3></div>
                     <div className="tool-card" onClick={() => setView('correspondence')}><h3>Comms HQ</h3></div>
                     <div className="tool-card" onClick={() => setView('documentVault')}><h3>Digital Vault</h3></div>
                     <div className="tool-card" onClick={() => setView('knowledgeBase')}><h3>Knowledge Base</h3></div>
                     <div className="tool-card" onClick={() => setView('campaignBuilder')}><h3>Campaign Site</h3></div>
-                    <div className="tool-card" onClick={() => setView('flyerGenerator')}><h3>Flyer Generator</h3></div>
                 </div>
             );
-            case 'myChecklist': return <MyChecklist items={items} setItems={setItems} />;
+            case 'myChecklist': return <MyChecklist items={items} setItems={setItems} onOpenBrainstorm={() => setView('taskBrainstormer')} />;
+            case 'taskBrainstormer': return <TaskBrainstormer profile={caseProfile} onAddTask={handleAddTask} />;
             case 'caseJournal': return <CaseJournal />;
             case 'expenses': return <ExpensesTracker />;
             case 'liveConversation': return <LiveGuide />;
@@ -1083,7 +1500,6 @@ const App: React.FC = () => {
             case 'documentVault': return <DocumentVault />;
             case 'knowledgeBase': return <KnowledgeBaseBuilder />;
             case 'campaignBuilder': return <CampaignSiteBuilder profile={caseProfile} />;
-            case 'flyerGenerator': return <FlyerGenerator profile={caseProfile} />;
             case 'caseSettings': return <CaseSettings profile={caseProfile} setProfile={setCaseProfile} />;
             case 'termsOfService': return <TermsOfService />;
             case 'dataManagement': return <DataManagement />;
