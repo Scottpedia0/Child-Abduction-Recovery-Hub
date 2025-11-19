@@ -46,11 +46,11 @@ interface CaseProfile {
     custodyStatus: CustodyStatus;
     parentRole: ParentRole;
     additionalContext?: string;
-    completedActions?: string[]; // New field for tracking what's already done
+    completedActions?: string[]; 
     isProfileComplete: boolean;
     isSkipped?: boolean;
     dossierData?: DossierData; 
-    caseNumbers?: Record<string, string>; // e.g. { "Local Police": "123", "State Dept": "ABC" }
+    caseNumbers?: Record<string, string>; 
 }
 
 interface SubTask {
@@ -104,23 +104,19 @@ interface KnowledgeBaseEntry {
     instructions?: string;
     template?: string;
     tags?: string[];
-    gates?: { [key: string]: any };
-    actions?: { label: string; steps: string[]; expected_outputs: string[]; ids_to_capture: string[]; }[];
-    evidence_schema?: { bucket: string; examples: string[]; filename_convention: string; }[];
-    escalation?: { when?: string; day_mark?: number; trigger: string; do?: string[] | string; action?: string; who?: string[] | string; contact?: string; }[];
-    donts?: string[];
 }
 
 interface VaultDocument {
     id: string;
     name: string;
     type: string; // 'Court Order', 'Police Report', etc.
-    date: string;
+    date: string; // The ACTUAL date on the document
     summary: string;
-    extractedText: string;
+    extractedText: string; // For RAG
     fileType: string;
     size: number;
     uploadedAt: string;
+    cloudUrl?: string; // If stored in Firebase Storage
 }
 
 interface ChatMessage {
@@ -176,7 +172,6 @@ const fileToBase64 = (file: File): Promise<string> => {
         reader.readAsDataURL(file);
         reader.onload = () => {
             const result = reader.result as string;
-            // Remove the data URL prefix (e.g., "data:application/pdf;base64,")
             const base64 = result.split(',')[1];
             resolve(base64);
         };
@@ -184,7 +179,7 @@ const fileToBase64 = (file: File): Promise<string> => {
     });
 };
 
-// --- HELPER: Resize Image (for Firestore) ---
+// --- HELPER: Resize Image ---
 const resizeImage = (base64Str: string, maxWidth = 800): Promise<string> => {
     return new Promise((resolve) => {
         const img = new Image();
@@ -203,12 +198,12 @@ const resizeImage = (base64Str: string, maxWidth = 800): Promise<string> => {
             canvas.height = height;
             const ctx = canvas.getContext('2d');
             ctx?.drawImage(img, 0, 0, width, height);
-            resolve(canvas.toDataURL('image/jpeg', 0.7)); // Compress to 70% quality
+            resolve(canvas.toDataURL('image/jpeg', 0.7)); 
         };
     });
 }
 
-// --- INDEXED DB HELPERS FOR VAULT ---
+// --- INDEXED DB HELPERS (Local Fallback) ---
 const DB_NAME = 'RecoveryHubVault';
 const STORE_NAME = 'documents';
 const DB_VERSION = 1;
@@ -227,7 +222,7 @@ const openVaultDB = (): Promise<IDBDatabase> => {
     });
 };
 
-const saveFileToVault = async (doc: VaultDocument, fileBlob: Blob) => {
+const saveFileToLocalVault = async (doc: VaultDocument, fileBlob: Blob) => {
     const db = await openVaultDB();
     return new Promise<void>((resolve, reject) => {
         const tx = db.transaction(STORE_NAME, 'readwrite');
@@ -238,7 +233,7 @@ const saveFileToVault = async (doc: VaultDocument, fileBlob: Blob) => {
     });
 };
 
-const getFilesFromVault = async (): Promise<VaultDocument[]> => {
+const getFilesFromLocalVault = async (): Promise<VaultDocument[]> => {
     const db = await openVaultDB();
     return new Promise((resolve, reject) => {
         const tx = db.transaction(STORE_NAME, 'readonly');
@@ -352,8 +347,15 @@ const IntelligenceBriefWidget: React.FC<{ profile: CaseProfile, onRefresh: (data
     );
 };
 
-const CriticalTasksWidget: React.FC<{ items: ActionItem[], onStart: () => void, isGenerating: boolean }> = ({ items, onStart, isGenerating }) => {
-    const topTasks = items.filter(i => !i.completed && (i.priority === 'Immediate' || i.priority === 'High')).slice(0, 3);
+const CriticalTasksWidget: React.FC<{ items: ActionItem[], onStart: () => void, isGenerating: boolean, onBrainstorm: () => void }> = ({ items, onStart, isGenerating, onBrainstorm }) => {
+    // Filter for incomplete items
+    const incomplete = items.filter(i => !i.completed);
+    
+    // Get top priorities
+    const topTasks = incomplete.filter(i => i.priority === 'Immediate' || i.priority === 'High').slice(0, 3);
+    
+    // Get next priorities (Medium/Low) if top are done
+    const nextTasks = incomplete.filter(i => i.priority !== 'Immediate' && i.priority !== 'High').slice(0, 3);
 
     if (items.length === 0) {
         return (
@@ -367,24 +369,34 @@ const CriticalTasksWidget: React.FC<{ items: ActionItem[], onStart: () => void, 
         );
     }
 
-    if (topTasks.length === 0) {
+    if (incomplete.length === 0) {
         return (
             <div className="critical-tasks-empty" style={{ backgroundColor: '#e8f5e9', borderColor: '#4caf50' }}>
-                <h4 style={{ color: '#1b5e20' }}>All Critical Tasks Complete</h4>
-                <p>Great job. Check the full list for next steps.</p>
+                <h4 style={{ color: '#1b5e20' }}>All Listed Tasks Complete</h4>
+                <p>The mission isn't over. Review strategy or brainstorm next steps.</p>
+                <button className="button-secondary" onClick={onBrainstorm}>Brainstorm Next Actions</button>
             </div>
         );
     }
 
+    const tasksToShow = topTasks.length > 0 ? topTasks : nextTasks;
+    const title = topTasks.length > 0 ? "Top Priorities" : "Next Priorities";
+
     return (
         <div className="critical-tasks-list">
-            <div style={{ fontSize: '0.8rem', textTransform: 'uppercase', color: '#666', marginBottom: '0.5rem' }}>Top Priorities</div>
-            {topTasks.map(task => (
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                <div style={{ fontSize: '0.8rem', textTransform: 'uppercase', color: '#666' }}>{title}</div>
+                {topTasks.length === 0 && <div style={{ fontSize: '0.7rem', color: '#4caf50', fontWeight: 'bold' }}>High Priority Cleared ✅</div>}
+            </div>
+            {tasksToShow.map(task => (
                 <div key={task.id} className="mini-task-card">
-                    <span className="mini-priority immediate">{task.priority}</span>
+                    <span className={`mini-priority ${task.priority.toLowerCase()}`}>{task.priority}</span>
                     <span className="mini-task-text">{task.task}</span>
                 </div>
             ))}
+            {topTasks.length === 0 && nextTasks.length === 0 && (
+                <button className="button-secondary full-width" onClick={onBrainstorm} style={{marginTop: '0.5rem', fontSize: '0.85rem'}}>+ Add More Tasks</button>
+            )}
         </div>
     );
 };
@@ -589,7 +601,7 @@ const MyChecklist: React.FC<{ items: ActionItem[]; setItems: React.Dispatch<Reac
             </div>
             <div className="items-list">
                 {items.map(item => (
-                    <div key={item.id} className="action-item ${item.completed ? 'completed' : ''}">
+                    <div key={item.id} className={`action-item ${item.completed ? 'completed' : ''}`}>
                         <div className="action-item-header">
                             <div style={{ display: 'flex', alignItems: 'center' }}>
                                 <input type="checkbox" className="action-item-checkbox" checked={item.completed} onChange={() => toggleItem(item.id)} />
@@ -601,6 +613,131 @@ const MyChecklist: React.FC<{ items: ActionItem[]; setItems: React.Dispatch<Reac
                     </div>
                 ))}
                 {items.length === 0 && <p>No items yet. Go to Dashboard to generate a plan.</p>}
+            </div>
+        </div>
+    );
+};
+
+const DocumentVault: React.FC = () => {
+    const [files, setFiles] = useState<VaultDocument[]>([]);
+    const [isAnalyzing, setIsAnalyzing] = useState(false);
+    const [analysisStatus, setAnalysisStatus] = useState('');
+
+    useEffect(() => {
+        // Initial load from local vault as fallback or cache
+        getFilesFromLocalVault().then(setFiles);
+
+        // If logged in, we should also fetch from Firestore to get RAG-ready docs
+        if (auth.currentUser) {
+            const q = query(collection(db, `users/${auth.currentUser.uid}/documents`));
+            getDocs(q).then(snap => {
+                const cloudDocs = snap.docs.map(d => d.data() as VaultDocument);
+                // Merge logic could go here, for now just set
+                if (cloudDocs.length > 0) setFiles(cloudDocs);
+            });
+        }
+    }, []);
+
+    const analyzeAndSaveDocument = async (file: File) => {
+        setIsAnalyzing(true);
+        setAnalysisStatus(`Analyzing ${file.name}...`);
+        try {
+            const base64 = await fileToBase64(file);
+            
+            // 1. Analyze with Gemini
+            const prompt = `
+            Analyze this document image/PDF for an international child abduction case. 
+            Extract:
+            1. "type": What is it? (e.g., Court Order, Police Report, Flight Ticket, ID).
+            2. "date": The specific date written ON the document (YYYY-MM-DD). Scan document closely for dates. If multiple, use the most relevant one (e.g. filing date).
+            3. "summary": A 2-sentence summary of the key content (who, what, when).
+            4. "extractedText": The full text content you can read.
+            
+            Return JSON.
+            `;
+
+            const result = await ai.models.generateContent({
+                model: "gemini-2.5-flash",
+                contents: [
+                    {
+                        inlineData: {
+                            mimeType: file.type,
+                            data: base64
+                        }
+                    },
+                    { text: prompt }
+                ],
+                config: {
+                    responseMimeType: "application/json"
+                }
+            });
+
+            const analysis = JSON.parse(result.text || "{}");
+            
+            const docData: VaultDocument = {
+                id: Date.now().toString(),
+                name: file.name,
+                type: analysis.type || 'Uncategorized',
+                date: analysis.date || new Date().toISOString().split('T')[0],
+                summary: analysis.summary || 'No summary available',
+                extractedText: analysis.extractedText || '',
+                fileType: file.type,
+                size: file.size,
+                uploadedAt: new Date().toISOString()
+            };
+
+            // 2. Save to Cloud (Firestore) if logged in
+            if (auth.currentUser) {
+                await setDoc(doc(db, `users/${auth.currentUser.uid}/documents`, docData.id), docData);
+            }
+
+            // 3. Save to Local Vault (IndexedDB) always
+            await saveFileToLocalVault(docData, file);
+            
+            setFiles(prev => [...prev, docData]);
+            setAnalysisStatus('Done!');
+            setTimeout(() => setAnalysisStatus(''), 2000);
+
+        } catch (e) {
+            console.error(e);
+            alert("Analysis failed. Please try again.");
+            setAnalysisStatus('');
+        } finally {
+            setIsAnalyzing(false);
+        }
+    };
+
+    return (
+        <div className="tool-card" style={{ cursor: 'default' }}>
+            <h2>Digital Vault & RAG Context</h2>
+            <p style={{ fontSize: '0.9rem', color: '#666' }}>Documents are analyzed by AI to extract dates and context for your case.</p>
+            
+            <div style={{ padding: '1rem', backgroundColor: '#e3f2fd', borderRadius: '8px', marginBottom: '1rem', textAlign: 'center' }}>
+                <input 
+                    type="file" 
+                    id="vault-upload" 
+                    style={{ display: 'none' }} 
+                    onChange={(e) => e.target.files?.[0] && analyzeAndSaveDocument(e.target.files[0])} 
+                    accept=".pdf,image/*"
+                />
+                <label htmlFor="vault-upload" className="button-primary" style={{ display: 'inline-block', cursor: 'pointer' }}>
+                    {isAnalyzing ? 'Analyzing...' : '➕ Upload & Analyze Document'}
+                </label>
+                {analysisStatus && <div style={{ marginTop: '0.5rem', fontSize: '0.9rem' }}>{analysisStatus}</div>}
+            </div>
+
+            <div style={{ marginTop: '1rem' }}>
+                {files.length === 0 && <p>No documents yet.</p>}
+                {files.map(f => (
+                    <div key={f.id} className="action-item">
+                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                            <strong>{f.name}</strong>
+                            <span className="journal-badge">{f.type}</span>
+                        </div>
+                        <div style={{ fontSize: '0.85rem', color: '#666', marginTop: '0.2rem' }}>Dated: {f.date}</div>
+                        <div style={{ fontSize: '0.9rem', marginTop: '0.5rem' }}>{f.summary}</div>
+                    </div>
+                ))}
             </div>
         </div>
     );
@@ -624,7 +761,7 @@ const CaseJournal: React.FC = () => {
 
     useEffect(() => {
         // Combine Logs and Docs for Unified Timeline
-        getFilesFromVault().then(docs => {
+        getFilesFromLocalVault().then(docs => {
              const docItems = docs.map(d => ({
                  ...d,
                  timelineType: 'doc',
@@ -692,6 +829,11 @@ const CaseJournal: React.FC = () => {
             const lines = doc.splitTextToSize(desc, 180);
             doc.text(lines, 10, y);
             y += (lines.length * 5) + 5;
+            
+            if (y >= 280) {
+                doc.addPage();
+                y = 20;
+            }
         });
         doc.save("Case_Timeline.pdf");
     };
@@ -1096,6 +1238,7 @@ const CaseSettings: React.FC<{ profile: CaseProfile, setProfile: (p: CaseProfile
     const [nums, setNums] = useState(profile.caseNumbers || {});
     const [newKey, setNewKey] = useState('');
     const [newVal, setNewVal] = useState('');
+    const [editProfile, setEditProfile] = useState(profile);
 
     const addNum = () => {
         if (newKey && newVal) {
@@ -1106,61 +1249,44 @@ const CaseSettings: React.FC<{ profile: CaseProfile, setProfile: (p: CaseProfile
         }
     };
 
-    return (
-        <div className="tool-card" style={{ cursor: 'default' }}>
-            <h2>Case IDs & Settings</h2>
-            <div className="form-grid">
-                <input type="text" placeholder="Agency (e.g. FBI)" value={newKey} onChange={e => setNewKey(e.target.value)} />
-                <input type="text" placeholder="Case Number" value={newVal} onChange={e => setNewVal(e.target.value)} />
-                <button className="button-primary" onClick={addNum}>Add ID</button>
-            </div>
-            <div className="id-list">
-                {Object.entries(nums).map(([k, v]) => (
-                    <div key={k} style={{ padding: '0.5rem', borderBottom: '1px solid #eee' }}><strong>{k}:</strong> {v}</div>
-                ))}
-            </div>
-        </div>
-    );
-};
-
-const DocumentVault: React.FC = () => {
-    const [files, setFiles] = useState<VaultDocument[]>([]);
-
-    useEffect(() => {
-        getFilesFromVault().then(setFiles);
-    }, []);
-
-    const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (e.target.files && e.target.files[0]) {
-            const file = e.target.files[0];
-            const doc: VaultDocument = {
-                id: Date.now().toString(),
-                name: file.name,
-                type: 'Uncategorized',
-                date: new Date().toISOString(),
-                summary: 'Pending Analysis...',
-                extractedText: '',
-                fileType: file.type,
-                size: file.size,
-                uploadedAt: new Date().toISOString()
-            };
-            await saveFileToVault(doc, file);
-            setFiles(prev => [...prev, doc]);
-            // AI Analysis trigger would go here
-        }
+    const saveProfile = () => {
+        setProfile(editProfile);
+        alert("Profile Updated");
     };
 
     return (
         <div className="tool-card" style={{ cursor: 'default' }}>
-            <h2>Digital Vault (Secure Local Storage)</h2>
-            <p style={{ fontSize: '0.9rem', color: '#666' }}>Documents are stored securely in your browser. Cloud sync requires Cloud Storage setup.</p>
-            <input type="file" onChange={handleUpload} />
-            <div style={{ marginTop: '1rem' }}>
-                {files.map(f => (
-                    <div key={f.id} className="action-item">
-                        <strong>{f.name}</strong>
-                        <div style={{ fontSize: '0.8rem' }}>{f.summary}</div>
-                    </div>
+            <h2>Case Profile & IDs</h2>
+            
+            <div className="form-grid" style={{ marginBottom: '2rem', paddingBottom: '2rem', borderBottom: '1px solid #eee' }}>
+                <div>
+                    <label>Child's Name</label>
+                    <input type="text" value={editProfile.childName} onChange={e => setEditProfile({...editProfile, childName: e.target.value})} />
+                </div>
+                <div>
+                    <label>Date Taken</label>
+                    <input type="date" value={editProfile.abductionDate} onChange={e => setEditProfile({...editProfile, abductionDate: e.target.value})} />
+                </div>
+                <div>
+                    <label>From (Country)</label>
+                    <input type="text" value={editProfile.fromCountry} onChange={e => setEditProfile({...editProfile, fromCountry: e.target.value})} />
+                </div>
+                <div>
+                    <label>To (Country)</label>
+                    <input type="text" value={editProfile.toCountry} onChange={e => setEditProfile({...editProfile, toCountry: e.target.value})} />
+                </div>
+                <button className="button-primary full-width" onClick={saveProfile}>Update Profile Details</button>
+            </div>
+
+            <h3>Case IDs</h3>
+            <div className="form-grid">
+                <input type="text" placeholder="Agency (e.g. FBI)" value={newKey} onChange={e => setNewKey(e.target.value)} />
+                <input type="text" placeholder="Case Number" value={newVal} onChange={e => setNewVal(e.target.value)} />
+                <button className="button-secondary" onClick={addNum}>Add ID</button>
+            </div>
+            <div className="id-list">
+                {Object.entries(nums).map(([k, v]) => (
+                    <div key={k} style={{ padding: '0.5rem', borderBottom: '1px solid #eee' }}><strong>{k}:</strong> {v}</div>
                 ))}
             </div>
         </div>
@@ -1405,14 +1531,17 @@ const PublicCampaignViewer: React.FC<{ id: string, previewData?: any }> = ({ id,
                          <div style={{ width: '100%', height: '300px', backgroundColor: '#eee', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '16px' }}>No Photo Available</div>
                     )}
                     <div>
-                        <h1 style={{ fontSize: '2.5rem', margin: '0 0 1rem 0', lineHeight: 1.1 }}>Bring {data.childName} Home</h1>
+                        <h1 style={{ fontSize: '2.5rem', margin: '0 0 1rem 0', lineHeight: 1.1 }}>Help Bring {data.childName} Home</h1>
                         <p style={{ fontSize: '1.1rem', color: '#555' }}>Missing from <strong>{data.fromCountry}</strong> to <strong>{data.toCountry}</strong></p>
                         <div style={{ backgroundColor: '#fef7ff', padding: '1.5rem', borderRadius: '12px', marginTop: '1rem' }}>
                             <p style={{ whiteSpace: 'pre-wrap' }}>{data.story}</p>
                         </div>
-                        <div style={{ marginTop: '2rem', display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
-                            {data.contactEmail && <button className="button-primary" onClick={() => window.location.href = `mailto:${data.contactEmail}`}>Email Family</button>}
-                            {data.contactPhone && <button className="button-secondary" onClick={() => window.location.href = `tel:${data.contactPhone}`}>Call Family</button>}
+                        
+                        <div style={{ marginTop: '2rem', backgroundColor: '#f5f5f5', padding: '1.5rem', borderRadius: '8px' }}>
+                            <h3 style={{ marginTop: 0, color: '#333' }}>Contact Info</h3>
+                            {data.contactEmail && <p style={{marginBottom: '0.5rem'}}><strong>Email:</strong> <a href={`mailto:${data.contactEmail}`}>{data.contactEmail}</a></p>}
+                            {data.contactPhone && <p style={{margin: 0}}><strong>Phone:</strong> <a href={`tel:${data.contactPhone}`}>{data.contactPhone}</a></p>}
+                            {!data.contactEmail && !data.contactPhone && <p style={{ fontStyle: 'italic', color: '#666' }}>No direct contact info provided. Please contact local authorities.</p>}
                         </div>
                     </div>
                 </div>
@@ -1455,6 +1584,7 @@ const DataManagement: React.FC = () => {
 const OnboardingWizard: React.FC<{ onComplete: (p: CaseProfile) => void }> = ({ onComplete }) => {
     const [step, setStep] = useState(0);
     const [data, setData] = useState<Partial<CaseProfile>>({ completedActions: [] });
+    const [analyzingDoc, setAnalyzingDoc] = useState(false);
 
     const next = () => setStep(s => s + 1);
 
@@ -1469,24 +1599,54 @@ const OnboardingWizard: React.FC<{ onComplete: (p: CaseProfile) => void }> = ({ 
     
     const handleDocUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files?.[0]) {
+            setAnalyzingDoc(true);
             const file = e.target.files[0];
             try {
-                const doc: VaultDocument = {
+                // Use the same analysis pipeline as the Vault
+                 const base64 = await fileToBase64(file);
+                 const prompt = `
+                 Analyze this legal document. Extract:
+                 1. "type": Document Type (Court Order, Report, etc.)
+                 2. "date": The specific date written ON the document (YYYY-MM-DD). If multiple, choose the filing date.
+                 3. "summary": One sentence summary.
+                 Return JSON.
+                 `;
+                 
+                 const result = await ai.models.generateContent({
+                    model: "gemini-2.5-flash",
+                    contents: [
+                        { inlineData: { mimeType: file.type, data: base64 } },
+                        { text: prompt }
+                    ],
+                    config: { responseMimeType: "application/json" }
+                 });
+                 
+                 const analysis = JSON.parse(result.text || "{}");
+                 
+                 const vaultDoc: VaultDocument = {
                     id: Date.now().toString(),
                     name: file.name,
-                    type: 'Initial Evidence',
-                    date: new Date().toISOString(),
-                    summary: 'Uploaded during case setup',
+                    type: analysis.type || 'Initial Evidence',
+                    date: analysis.date || new Date().toISOString().split('T')[0],
+                    summary: analysis.summary || 'Uploaded during setup',
                     extractedText: '',
                     fileType: file.type,
                     size: file.size,
                     uploadedAt: new Date().toISOString()
                 };
-                await saveFileToVault(doc, file);
-                alert(`"${file.name}" saved to Digital Vault (Local).`);
+                
+                // Save to cloud if logged in, local if not
+                if (auth.currentUser) {
+                    await setDoc(doc(db, `users/${auth.currentUser.uid}/documents`, vaultDoc.id), vaultDoc);
+                }
+                await saveFileToLocalVault(vaultDoc, file);
+                
+                alert(`Analyzed & Saved: ${vaultDoc.type} (${vaultDoc.date})`);
             } catch (err) {
                 console.error(err);
-                alert("Failed to save document.");
+                alert("Failed to analyze document, but saved locally.");
+            } finally {
+                setAnalyzingDoc(false);
             }
         }
     };
@@ -1587,10 +1747,11 @@ const OnboardingWizard: React.FC<{ onComplete: (p: CaseProfile) => void }> = ({ 
                         </div>
 
                         <label>Upload Key Documents (Optional)</label>
-                        <p style={{fontSize: '0.9rem', color: '#666'}}>Court orders or police reports will be saved to your secure Digital Vault.</p>
-                        <input type="file" onChange={handleDocUpload} style={{ marginBottom: '1.5rem' }} />
+                        <p style={{fontSize: '0.9rem', color: '#666'}}>Court orders or police reports will be analyzed and saved to your Vault.</p>
+                        <input type="file" onChange={handleDocUpload} accept=".pdf,image/*" style={{ marginBottom: '0.5rem' }} />
+                        {analyzingDoc && <div style={{ fontSize: '0.8rem', color: '#005ac1' }}>Analyzing document... please wait...</div>}
                     
-                        <label>Is there anything else?</label>
+                        <label style={{marginTop: '1rem', display: 'block'}}>Is there anything else?</label>
                         <p style={{fontSize: '0.9rem', color: '#666'}}>Context affects strategy (e.g., "Child has medical needs," "History of domestic violence," "Abductor has dual citizenship").</p>
                         <textarea 
                             value={data.additionalContext || ''} 
@@ -1601,7 +1762,7 @@ const OnboardingWizard: React.FC<{ onComplete: (p: CaseProfile) => void }> = ({ 
                     </div>
 
                     <div className="full-width" style={{marginTop: '1rem'}}>
-                        <button className="button-primary full-width" onClick={() => onComplete({ ...data, isProfileComplete: true } as any)}>Finish Setup & Build Plan</button>
+                        <button className="button-primary full-width" onClick={() => onComplete({ ...data, isProfileComplete: true } as any)} disabled={analyzingDoc}>Finish Setup & Build Plan</button>
                         <button className="button-secondary" onClick={() => setStep(1)} style={{marginTop: '0.5rem', width: '100%', border: 'none'}}>Back</button>
                     </div>
                 </div>
@@ -1622,28 +1783,77 @@ const App: React.FC = () => {
     const [user, setUser] = useState<User | null>(null);
     const [isGeneratingPlan, setIsGeneratingPlan] = useState(false);
 
-    // Restore session from local storage or Auth
+    // --- CLOUD SYNC MANAGER ---
+    const syncDataToCloud = async (profile: CaseProfile, tasks: ActionItem[]) => {
+        if (!auth.currentUser) return;
+        const uid = auth.currentUser.uid;
+        try {
+            // Save Profile
+            await setDoc(doc(db, `users/${uid}/profile/data`), profile);
+            // Save Tasks (batch)
+            await setDoc(doc(db, `users/${uid}/data/tasks`), { items: tasks });
+        } catch (e) {
+            console.error("Sync failed", e);
+        }
+    };
+
+    const loadDataFromCloud = async (uid: string) => {
+        try {
+            // 1. Load Profile
+            const profileSnap = await getDoc(doc(db, `users/${uid}/profile/data`));
+            if (profileSnap.exists()) {
+                const data = profileSnap.data() as CaseProfile;
+                setCaseProfile(data);
+                // If profile exists, go to dashboard
+                if (data.isProfileComplete) setView('dashboard');
+            }
+
+            // 2. Load Tasks
+            const tasksSnap = await getDoc(doc(db, `users/${uid}/data/tasks`));
+            if (tasksSnap.exists()) {
+                setItems(tasksSnap.data().items);
+            }
+            
+            // 3. Documents are loaded by the DocumentVault component independently
+        } catch (e) {
+            console.error("Load failed", e);
+        }
+    };
+
     useEffect(() => {
+        // Initial Local Load
         const saved = localStorage.getItem('recoveryHubProfile');
         if (saved) setCaseProfile(JSON.parse(saved));
         
         const savedItems = localStorage.getItem('recoveryHubItems');
         if (savedItems) setItems(JSON.parse(savedItems));
 
+        // Auth Listener
         const unsubscribe = onAuthStateChanged(auth, (u) => {
             setUser(u);
-            // Here we would sync with Firestore if user is logged in
+            if (u) {
+                // User just logged in. Pull data from cloud.
+                // Note: We rely on cloud data overwriting local data if it exists.
+                loadDataFromCloud(u.uid);
+            }
         });
         return () => unsubscribe();
     }, []);
 
+    // Sync on Change (if logged in)
     useEffect(() => {
-        if (caseProfile.isProfileComplete) localStorage.setItem('recoveryHubProfile', JSON.stringify(caseProfile));
-    }, [caseProfile]);
+        if (caseProfile.isProfileComplete) {
+            localStorage.setItem('recoveryHubProfile', JSON.stringify(caseProfile));
+            if (user) syncDataToCloud(caseProfile, items);
+        }
+    }, [caseProfile, user]); // Sync profile changes
 
     useEffect(() => {
-        if (items.length > 0) localStorage.setItem('recoveryHubItems', JSON.stringify(items));
-    }, [items]);
+        if (items.length > 0) {
+            localStorage.setItem('recoveryHubItems', JSON.stringify(items));
+             if (user) syncDataToCloud(caseProfile, items);
+        }
+    }, [items, user]); // Sync task changes
 
     const handleSignIn = async () => {
         try {
@@ -1767,7 +1977,7 @@ const App: React.FC = () => {
                             <div className="status-pill active">ACTIVE CASE</div>
                         </div>
                         <div className="hero-content-grid">
-                             <CriticalTasksWidget items={items} onStart={handleStart} isGenerating={isGeneratingPlan} />
+                             <CriticalTasksWidget items={items} onStart={handleStart} isGenerating={isGeneratingPlan} onBrainstorm={() => setView('taskBrainstormer')} />
                              <IntelligenceBriefWidget profile={caseProfile} onRefresh={handleDossierRefresh} />
                         </div>
                         <div style={{ marginTop: '2rem', borderTop: '1px solid #e1e2ec', paddingTop: '1.5rem' }}>
