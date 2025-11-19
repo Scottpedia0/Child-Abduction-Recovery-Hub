@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 import { GoogleGenAI, Type, LiveServerMessage, Modality, FunctionDeclaration } from "@google/genai";
@@ -42,6 +43,7 @@ interface CaseProfile {
     abductorRelationship?: string;
     custodyStatus: CustodyStatus;
     parentRole: ParentRole;
+    additionalContext?: string;
     isProfileComplete: boolean;
     isSkipped?: boolean;
     dossierData?: DossierData; 
@@ -833,11 +835,23 @@ const ExpensesTracker: React.FC = () => {
 
 const KnowledgeBaseBuilder: React.FC = () => {
     const [search, setSearch] = useState('');
-    // Mock data for demo - in real app would fetch
+    // Comprehensive mock data
     const entries: KnowledgeBaseEntry[] = [
-        { id: '1', entryType: 'resource', name: 'Hague Convention Text', countryPair: 'Global', resourceType: 'Legal Text', tags: ['Legal', 'Treaty'] },
-        { id: '2', entryType: 'guidance', name: 'Filing a Reunite Application', countryPair: 'UK', resourceType: 'Guide', tags: ['UK', 'Legal'] },
-        { id: '3', entryType: 'opsec', name: 'Digital Safety Checklist', countryPair: 'All', resourceType: 'Security', tags: ['Safety', 'Tech'] }
+        { id: '1', entryType: 'resource', name: 'Hague Convention Text (Full)', countryPair: 'Global', resourceType: 'Legal Text', tags: ['Legal', 'Treaty', 'Official'], summary: 'Full text of the 1980 Hague Convention on the Civil Aspects of International Child Abduction.' },
+        { id: '2', entryType: 'guidance', name: 'US State Dept - IPCA Action Guide', countryPair: 'USA', resourceType: 'Guide', tags: ['USA', 'Government', 'First Steps'], summary: 'Official step-by-step guide from the Office of Children\'s Issues.' },
+        { id: '3', entryType: 'opsec', name: 'Digital Safety & Spyware Checklist', countryPair: 'Global', resourceType: 'Security', tags: ['Safety', 'Tech', 'Privacy'], summary: 'How to secure your devices and accounts from monitoring by an abductor.' },
+        { id: '4', entryType: 'resource', name: 'Reunite International (UK)', countryPair: 'UK', resourceType: 'NGO', tags: ['UK', 'Support', 'Legal Aid'], summary: 'Leading UK charity specializing in international parental child abduction.' },
+        { id: '5', entryType: 'template', name: 'Police Report Filing Template', countryPair: 'Global', resourceType: 'Template', tags: ['Police', 'Documentation'], summary: 'Standardized format for filing a missing child report to ensure all key details are recorded.' },
+        { id: '6', entryType: 'resource', name: 'NCMEC (National Center for Missing & Exploited Children)', countryPair: 'USA', resourceType: 'NGO', tags: ['USA', 'Support', 'Investigation'], summary: 'US-based organization providing resources and case management support.' },
+        { id: '7', entryType: 'guidance', name: 'Hague Article 28 - Sample Form', countryPair: 'Global', resourceType: 'Legal Form', tags: ['Legal', 'Hague', 'Forms'], summary: 'Sample application form for return under the Hague Convention.' },
+        { id: '8', entryType: 'resource', name: 'Interpol Yellow Notice Criteria', countryPair: 'Global', resourceType: 'Police', tags: ['Interpol', 'International'], summary: 'Requirements for issuing an Interpol Yellow Notice for a missing person.' },
+        { id: '9', entryType: 'guidance', name: 'Selecting a Foreign Attorney', countryPair: 'Global', resourceType: 'Guide', tags: ['Legal', 'Representation'], summary: 'Questions to ask when hiring a lawyer in the destination country.' },
+        { id: '10', entryType: 'prevention', name: 'Children\'s Passport Issuance Alert Program (CPIAP)', countryPair: 'USA', resourceType: 'Government', tags: ['USA', 'Prevention', 'Passport'], summary: 'US program to notify parents of passport applications for their children.' },
+        { id: '11', entryType: 'resource', name: 'International Child Abduction Remedies Act (ICARA)', countryPair: 'USA', resourceType: 'Legal Text', tags: ['USA', 'Legal', 'Statute'], summary: 'US federal law implementing the Hague Convention.' },
+        { id: '12', entryType: 'guidance', name: 'Japan - Hague Implementation Guide', countryPair: 'Japan', resourceType: 'Country Specific', tags: ['Japan', 'Asia', 'Hague'], summary: 'Specifics on how Japan implements the Hague Convention (since 2014).' },
+        { id: '13', entryType: 'template', name: 'Left-Behind Parent Statement', countryPair: 'Global', resourceType: 'Template', tags: ['Legal', 'Affidavit'], summary: 'Template for writing a personal impact statement for court.' },
+        { id: '14', entryType: 'resource', name: 'Global Legal Action Network', countryPair: 'Global', resourceType: 'NGO', tags: ['Legal', 'Human Rights'], summary: 'Network of lawyers supporting transnational human rights cases.' },
+        { id: '15', entryType: 'opsec', name: 'Secure Communication Tools', countryPair: 'Global', resourceType: 'Tech', tags: ['Safety', 'Tech'], summary: 'List of encrypted messaging apps and secure email providers.' }
     ];
 
     const filtered = entries.filter(e => e.name.toLowerCase().includes(search.toLowerCase()) || e.tags?.some(t => t.toLowerCase().includes(search.toLowerCase())));
@@ -845,14 +859,16 @@ const KnowledgeBaseBuilder: React.FC = () => {
     return (
         <div className="tool-card" style={{ cursor: 'default' }}>
             <h2>Community Knowledge Base</h2>
+            <p>A curated library of legal texts, government guides, and operational security templates.</p>
             <input type="text" placeholder="Search resources, guides, legal texts..." value={search} onChange={e => setSearch(e.target.value)} style={{ marginBottom: '1rem' }} />
             <div className="tools-grid">
                 {filtered.map(entry => (
-                    <div key={entry.id} className="dossier-card">
-                        <div className="section-header">{entry.entryType}</div>
-                        <h4>{entry.name}</h4>
-                        <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
-                            {entry.tags?.map(t => <span key={t} className="journal-badge">{t}</span>)}
+                    <div key={entry.id} className="dossier-card" style={{ minHeight: '180px' }}>
+                        <div className="section-header">{entry.resourceType}</div>
+                        <h4 style={{ margin: '0.5rem 0' }}>{entry.name}</h4>
+                        <p style={{ fontSize: '0.85rem', color: '#555' }}>{entry.summary}</p>
+                        <div style={{ display: 'flex', gap: '0.5rem', marginTop: 'auto', flexWrap: 'wrap' }}>
+                            {entry.tags?.map(t => <span key={t} className="journal-badge" style={{ fontSize: '0.65rem' }}>{t}</span>)}
                         </div>
                     </div>
                 ))}
@@ -1100,14 +1116,17 @@ const CampaignSiteBuilder: React.FC<{ profile: CaseProfile }> = ({ profile }) =>
     const [photo, setPhoto] = useState<string | null>(null);
     const [publishedUrl, setPublishedUrl] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
+    
+    const [email, setEmail] = useState('');
+    const [phone, setPhone] = useState('');
 
     useEffect(() => {
         if (profile.childName) {
-            // Pre-fill some basic text
             const defaultStory = `${profile.childName} was taken on ${profile.abductionDate}. Please help us find them.`;
             if (!story) setStory(defaultStory);
         }
-    }, [profile]);
+        if (auth.currentUser?.email) setEmail(auth.currentUser.email);
+    }, [profile, auth.currentUser]);
 
     const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files?.[0]) {
@@ -1135,7 +1154,8 @@ const CampaignSiteBuilder: React.FC<{ profile: CaseProfile }> = ({ profile }) =>
                 photo: photo,
                 fromCountry: profile.fromCountry,
                 toCountry: profile.toCountry,
-                contactEmail: auth.currentUser.email,
+                contactEmail: email,
+                contactPhone: phone,
                 createdAt: new Date().toISOString()
             });
             setPublishedUrl(`${window.location.origin}?c=${id}`);
@@ -1159,6 +1179,13 @@ const CampaignSiteBuilder: React.FC<{ profile: CaseProfile }> = ({ profile }) =>
             <label style={{ display: 'block', marginTop: '1rem', marginBottom: '0.5rem' }}>Public Story</label>
             <textarea placeholder="Write your public story here..." value={story} onChange={e => setStory(e.target.value)} rows={6} className="full-width" />
             
+            <label style={{ display: 'block', marginTop: '1rem', marginBottom: '0.5rem' }}>Public Contact Info</label>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                <input type="email" placeholder="Public Email (e.g. find.charlotte@gmail.com)" value={email} onChange={e => setEmail(e.target.value)} />
+                <input type="tel" placeholder="Public Phone (Optional)" value={phone} onChange={e => setPhone(e.target.value)} />
+            </div>
+            <p style={{ fontSize: '0.8rem', color: '#666' }}>Leave blank if you don't want to share.</p>
+
             <button className="button-primary" onClick={publish} disabled={loading} style={{ marginTop: '1rem' }}>
                 {loading ? 'Publishing...' : 'Publish to Web'}
             </button>
@@ -1217,8 +1244,9 @@ const PublicCampaignViewer: React.FC<{ id: string }> = ({ id }) => {
                         <div style={{ backgroundColor: '#fef7ff', padding: '1.5rem', borderRadius: '12px', marginTop: '1rem' }}>
                             <p style={{ whiteSpace: 'pre-wrap' }}>{data.story}</p>
                         </div>
-                        <div style={{ marginTop: '2rem' }}>
-                            <button className="button-primary" onClick={() => window.location.href = `mailto:${data.contactEmail}`}>Contact Family</button>
+                        <div style={{ marginTop: '2rem', display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+                            {data.contactEmail && <button className="button-primary" onClick={() => window.location.href = `mailto:${data.contactEmail}`}>Email Family</button>}
+                            {data.contactPhone && <button className="button-secondary" onClick={() => window.location.href = `tel:${data.contactPhone}`}>Call Family</button>}
                         </div>
                     </div>
                 </div>
@@ -1331,8 +1359,27 @@ const OnboardingWizard: React.FC<{ onComplete: (p: CaseProfile) => void }> = ({ 
                     </div>
 
                     <div className="full-width" style={{marginTop: '1rem'}}>
-                        <button className="button-primary full-width" onClick={() => onComplete({ ...data, isProfileComplete: true } as any)}>Finish Setup & Build Plan</button>
+                        <button className="button-primary full-width" onClick={next}>Next Step</button>
                         <button className="button-secondary" onClick={() => setStep(0)} style={{marginTop: '0.5rem', width: '100%', border: 'none'}}>Back</button>
+                    </div>
+                </div>
+            )}
+             {step === 2 && (
+                <div className="form-grid">
+                    <div className="full-width">
+                        <label>Additional Context (Optional)</label>
+                        <p style={{fontSize: '0.9rem', color: '#666'}}>Tell us anything else that might affect the legal strategy (e.g., "Child has a medical condition," "Abductor has dual citizenship," "There is a history of domestic violence," "There are pending criminal charges").</p>
+                        <textarea 
+                            value={data.additionalContext || ''} 
+                            onChange={e => setData({...data, additionalContext: e.target.value})} 
+                            rows={6} 
+                            placeholder="Enter details here..."
+                        />
+                    </div>
+
+                    <div className="full-width" style={{marginTop: '1rem'}}>
+                        <button className="button-primary full-width" onClick={() => onComplete({ ...data, isProfileComplete: true } as any)}>Finish Setup & Build Plan</button>
+                        <button className="button-secondary" onClick={() => setStep(1)} style={{marginTop: '0.5rem', width: '100%', border: 'none'}}>Back</button>
                     </div>
                 </div>
             )}
@@ -1395,7 +1442,9 @@ const App: React.FC = () => {
             - Missing From: ${caseProfile.fromCountry}
             - Taken To: ${caseProfile.toCountry}
             - Time Missing: ${caseProfile.abductionDate}
-            - Custody: ${caseProfile.custodyStatus}
+            - Custody Status: ${caseProfile.custodyStatus}
+            - Abductor: ${caseProfile.abductorRelationship}
+            - Additional Context: ${caseProfile.additionalContext || 'None provided'}
             
             Generate 12-15 distinct, actionable tasks.
             Prioritize them strictly:
@@ -1403,6 +1452,8 @@ const App: React.FC = () => {
             - "High": First week legal actions (Hague application, Lawyer retention).
             - "Medium": Evidence gathering and logistical support.
             - "Low": Long-term administrative tasks.
+            
+            Tailor the tasks specifically to the context provided (e.g. if medical issues are mentioned, add medical tasks).
             `;
 
             const result = await ai.models.generateContent({
@@ -1481,7 +1532,7 @@ const App: React.FC = () => {
                     </div>
                     
                     <div className="tool-card" onClick={() => setView('myChecklist')}><h3>📋 Action Plan</h3></div>
-                    <div className="tool-card" onClick={() => setView('taskBrainstormer')}><h3>💡 Strategy Chat</h3></div>
+                    <div className="tool-card" onClick={() => setView('taskBrainstormer')}><h3>💡 Strategy & Task Brainstorming</h3></div>
                     <div className="tool-card" onClick={() => setView('caseJournal')}><h3>Case Timeline</h3></div>
                     <div className="tool-card" onClick={() => setView('liveConversation')}><h3>Live Strategy Guide</h3></div>
                     <div className="tool-card" onClick={() => setView('expenses')}><h3>Expense Tracker</h3></div>
@@ -1521,7 +1572,7 @@ const App: React.FC = () => {
                     <a onClick={() => setView('caseSettings')}>Settings</a>
                 </nav>
                 <div className="auth-widget">
-                    {user ? <div className="user-pill"><img src={user.photoURL || ''} /> {user.displayName}</div> : <button className="button-secondary small-auth-btn" onClick={() => signInWithPopup(auth, new GoogleAuthProvider())}>Sign In / Save</button>}
+                    {user ? <div className="user-pill"><img src={user.photoURL || ''} /> {user.displayName}</div> : <button className="button-secondary small-auth-btn" onClick={() => signInWithPopup(auth, new GoogleAuthProvider())}>Sign In / Save Case</button>}
                 </div>
             </header>
 
