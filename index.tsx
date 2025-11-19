@@ -9,7 +9,6 @@ import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
 
 // --- FIREBASE INITIALIZATION ---
-// Your web app's Firebase configuration
 const firebaseConfig = {
   apiKey: "AIzaSyCLn6ThJrbhnNGO1-YeM_ONqK70-Ega7og",
   authDomain: "recovery-hub-prod.firebaseapp.com",
@@ -78,6 +77,8 @@ interface LogEntry {
     description: string;
     peopleInvolved: string;
     createdAt: string;
+    isPublic?: boolean; // New: Toggle for public timeline
+    sourceDocId?: string; // New: Link to a document if this event was parsed from one
 }
 
 interface ExpenseEntry {
@@ -109,14 +110,15 @@ interface KnowledgeBaseEntry {
 interface VaultDocument {
     id: string;
     name: string;
-    type: string; // 'Court Order', 'Police Report', etc.
-    date: string; // The ACTUAL date on the document
+    type: string;
+    date: string;
     summary: string;
-    extractedText: string; // For RAG
+    extractedText: string;
     fileType: string;
     size: number;
     uploadedAt: string;
-    cloudUrl?: string; // If stored in Firebase Storage
+    cloudUrl?: string;
+    isPublic?: boolean; // New: Toggle for public timeline
 }
 
 interface ChatMessage {
@@ -126,10 +128,8 @@ interface ChatMessage {
 }
 
 // --- RAG HELPER ---
-// Fetches all extracted text from documents to build context window
 const getRagContext = async (): Promise<string> => {
     try {
-        // 1. Try Local IndexedDB first (always fastest/most up to date locally)
         const docs = await getFilesFromLocalVault();
         if (docs.length > 0) {
              const context = docs.map(d => `[DOCUMENT: ${d.type} (${d.date})] \nSummary: ${d.summary} \nContent Snippet: ${d.extractedText?.substring(0, 500)}...`).join('\n\n');
@@ -264,12 +264,25 @@ const getFilesFromLocalVault = async (): Promise<VaultDocument[]> => {
     });
 };
 
+const deleteFileFromLocalVault = async (id: string) => {
+    const db = await openVaultDB();
+    return new Promise<void>((resolve, reject) => {
+        const tx = db.transaction(STORE_NAME, 'readwrite');
+        const store = tx.objectStore(STORE_NAME);
+        store.delete(id);
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+    });
+};
+
+
 // --- AI CLIENT ---
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 // --- COMPONENTS ---
 
 const IntelligenceBriefWidget: React.FC<{ profile: CaseProfile, onRefresh: (data: DossierData) => void }> = ({ profile, onRefresh }) => {
+    // ... (Same as before, no changes needed here)
     const [loading, setLoading] = useState(false);
 
     const refreshAnalysis = async () => {
@@ -365,13 +378,9 @@ const IntelligenceBriefWidget: React.FC<{ profile: CaseProfile, onRefresh: (data
 };
 
 const CriticalTasksWidget: React.FC<{ items: ActionItem[], onStart: () => void, isGenerating: boolean, onBrainstorm: () => void }> = ({ items, onStart, isGenerating, onBrainstorm }) => {
-    // Filter for incomplete items
+   // ... (Same as before)
     const incomplete = items.filter(i => !i.completed);
-    
-    // Get top priorities
     const topTasks = incomplete.filter(i => i.priority === 'Immediate' || i.priority === 'High').slice(0, 3);
-    
-    // Get next priorities (Medium/Low) if top are done
     const nextTasks = incomplete.filter(i => i.priority !== 'Immediate' && i.priority !== 'High').slice(0, 3);
 
     if (items.length === 0) {
@@ -419,6 +428,7 @@ const CriticalTasksWidget: React.FC<{ items: ActionItem[], onStart: () => void, 
 };
 
 const SimilarCasesWidget: React.FC<{ from: string, to: string }> = ({ from, to }) => {
+    // ... (Same as before)
     const [stories, setStories] = useState<{ title: string; url: string; source: string }[]>([]);
     const [loading, setLoading] = useState(true);
 
@@ -478,6 +488,7 @@ const SimilarCasesWidget: React.FC<{ from: string, to: string }> = ({ from, to }
 };
 
 const TaskBrainstormer: React.FC<{ profile: CaseProfile, onAddTask: (task: ActionItem) => void }> = ({ profile, onAddTask }) => {
+    // ... (Same as before)
     const [input, setInput] = useState('');
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [loading, setLoading] = useState(false);
@@ -607,6 +618,7 @@ const TaskBrainstormer: React.FC<{ profile: CaseProfile, onAddTask: (task: Actio
 };
 
 const MyChecklist: React.FC<{ items: ActionItem[]; setItems: React.Dispatch<React.SetStateAction<ActionItem[]>>; onOpenBrainstorm: () => void }> = ({ items, setItems, onOpenBrainstorm }) => {
+    // ... (Same as before)
     const toggleItem = (id: string) => {
         setItems(prev => prev.map(i => i.id === id ? { ...i, completed: !i.completed } : i));
     };
@@ -641,15 +653,11 @@ const DocumentVault: React.FC = () => {
     const [analysisStatus, setAnalysisStatus] = useState('');
 
     useEffect(() => {
-        // Initial load from local vault as fallback or cache
         getFilesFromLocalVault().then(setFiles);
-
-        // If logged in, we should also fetch from Firestore to get RAG-ready docs
         if (auth.currentUser) {
             const q = query(collection(db, `users/${auth.currentUser.uid}/documents`));
             getDocs(q).then(snap => {
                 const cloudDocs = snap.docs.map(d => d.data() as VaultDocument);
-                // Merge logic could go here, for now just set
                 if (cloudDocs.length > 0) setFiles(cloudDocs);
             });
         }
@@ -660,33 +668,23 @@ const DocumentVault: React.FC = () => {
         setAnalysisStatus(`Analyzing ${file.name}...`);
         try {
             const base64 = await fileToBase64(file);
-            
-            // 1. Analyze with Gemini
             const prompt = `
             Analyze this document image/PDF for an international child abduction case. 
             Extract:
-            1. "type": What is it? (e.g., Court Order, Police Report, Flight Ticket, ID).
-            2. "date": The specific date written ON the document (YYYY-MM-DD). Scan document closely for dates. If multiple, use the most relevant one (e.g. filing date).
-            3. "summary": A 2-sentence summary of the key content (who, what, when).
-            4. "extractedText": The full text content you can read.
-            
+            1. "type": What is it? (e.g., Court Order, Police Report).
+            2. "date": The specific date written ON the document (YYYY-MM-DD). 
+            3. "summary": A 2-sentence summary.
+            4. "extractedText": The full text content.
             Return JSON.
             `;
 
             const result = await ai.models.generateContent({
                 model: "gemini-2.5-flash",
                 contents: [
-                    {
-                        inlineData: {
-                            mimeType: file.type,
-                            data: base64
-                        }
-                    },
+                    { inlineData: { mimeType: file.type, data: base64 } },
                     { text: prompt }
                 ],
-                config: {
-                    responseMimeType: "application/json"
-                }
+                config: { responseMimeType: "application/json" }
             });
 
             const analysis = JSON.parse(result.text || "{}");
@@ -700,17 +698,14 @@ const DocumentVault: React.FC = () => {
                 extractedText: analysis.extractedText || '',
                 fileType: file.type,
                 size: file.size,
-                uploadedAt: new Date().toISOString()
+                uploadedAt: new Date().toISOString(),
+                isPublic: false // Default to private
             };
 
-            // 2. Save to Cloud (Firestore) if logged in
             if (auth.currentUser) {
                 await setDoc(doc(db, `users/${auth.currentUser.uid}/documents`, docData.id), docData);
             }
-
-            // 3. Save to Local Vault (IndexedDB) always
             await saveFileToLocalVault(docData, file);
-            
             setFiles(prev => [...prev, docData]);
             setAnalysisStatus('Done!');
             setTimeout(() => setAnalysisStatus(''), 2000);
@@ -718,16 +713,30 @@ const DocumentVault: React.FC = () => {
         } catch (e) {
             console.error(e);
             alert("Analysis failed. Please try again.");
-            setAnalysisStatus('');
         } finally {
             setIsAnalyzing(false);
+        }
+    };
+
+    const handleDelete = async (id: string) => {
+        if(confirm("Are you sure you want to delete this document? This cannot be undone.")) {
+            try {
+                await deleteFileFromLocalVault(id);
+                if (auth.currentUser) {
+                    await deleteDoc(doc(db, `users/${auth.currentUser.uid}/documents`, id));
+                }
+                setFiles(files.filter(f => f.id !== id));
+            } catch(e) {
+                console.error(e);
+                alert("Error deleting file.");
+            }
         }
     };
 
     return (
         <div className="tool-card" style={{ cursor: 'default' }}>
             <h2>Digital Vault & RAG Context</h2>
-            <p style={{ fontSize: '0.9rem', color: '#666' }}>Documents are analyzed by AI to extract dates and context for your case.</p>
+            <p style={{ fontSize: '0.9rem', color: '#666' }}>Documents are analyzed by AI to extract dates and context.</p>
             
             <div style={{ padding: '1rem', backgroundColor: '#e3f2fd', borderRadius: '8px', marginBottom: '1rem', textAlign: 'center' }}>
                 <input 
@@ -747,9 +756,12 @@ const DocumentVault: React.FC = () => {
                 {files.length === 0 && <p>No documents yet.</p>}
                 {files.map(f => (
                     <div key={f.id} className="action-item">
-                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                            <strong>{f.name}</strong>
-                            <span className="journal-badge">{f.type}</span>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                            <div>
+                                <strong>{f.name}</strong>
+                                <span className="journal-badge" style={{marginLeft: '0.5rem'}}>{f.type}</span>
+                            </div>
+                            <button onClick={() => handleDelete(f.id)} style={{color: '#ba1a1a', background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.2rem'}} title="Delete Document">🗑️</button>
                         </div>
                         <div style={{ fontSize: '0.85rem', color: '#666', marginTop: '0.2rem' }}>Dated: {f.date}</div>
                         <div style={{ fontSize: '0.9rem', marginTop: '0.5rem' }}>{f.summary}</div>
@@ -777,7 +789,6 @@ const CaseJournal: React.FC = () => {
         localStorage.setItem('caseLogs', JSON.stringify(logs));
     }, [logs]);
 
-    // Combine Logs and Docs for Unified Timeline
     const fetchTimeline = () => {
         getFilesFromLocalVault().then(docs => {
              const docItems = docs.map(d => ({
@@ -798,7 +809,7 @@ const CaseJournal: React.FC = () => {
 
     useEffect(() => {
         fetchTimeline();
-    }, [logs]); // Refresh when logs change
+    }, [logs]);
 
     const handleDocUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files?.[0]) {
@@ -806,13 +817,19 @@ const CaseJournal: React.FC = () => {
             const file = e.target.files[0];
             try {
                  const base64 = await fileToBase64(file);
+                 
+                 // NEW PROMPT: Look for MULTIPLE events in one doc
                  const prompt = `
-                 Analyze this legal document. Extract:
-                 1. "type": Document Type (Court Order, Report, etc.)
-                 2. "date": The specific date written ON the document (YYYY-MM-DD).
-                 3. "summary": One sentence summary.
-                 Return JSON.
+                 Analyze this legal document. It may describe a HISTORY of events.
+                 
+                 Return a JSON object with two parts:
+                 1. "mainDoc": { "type": "Doc Type", "date": "Filing Date", "summary": "Overall summary" }
+                 2. "timelineEvents": An ARRAY of specific events mentioned in the text.
+                    Example: [ { "date": "2023-01-01", "description": "Hearing occurred", "type": "Court" } ]
+                 
+                 If only one event, just put it in the array.
                  `;
+                 
                  const result = await ai.models.generateContent({
                     model: "gemini-2.5-flash",
                     contents: [
@@ -822,23 +839,46 @@ const CaseJournal: React.FC = () => {
                     config: { responseMimeType: "application/json" }
                  });
                  const analysis = JSON.parse(result.text || "{}");
+                 
+                 // 1. Create the Main Vault Doc
                  const vaultDoc: VaultDocument = {
                     id: Date.now().toString(),
                     name: file.name,
-                    type: analysis.type || 'Evidence',
-                    date: analysis.date || new Date().toISOString().split('T')[0],
-                    summary: analysis.summary || 'Uploaded to timeline',
+                    type: analysis.mainDoc?.type || 'Evidence',
+                    date: analysis.mainDoc?.date || new Date().toISOString().split('T')[0],
+                    summary: analysis.mainDoc?.summary || 'Uploaded to timeline',
                     extractedText: '',
                     fileType: file.type,
                     size: file.size,
-                    uploadedAt: new Date().toISOString()
+                    uploadedAt: new Date().toISOString(),
+                    isPublic: false
                 };
+                
                 if (auth.currentUser) {
                     await setDoc(doc(db, `users/${auth.currentUser.uid}/documents`, vaultDoc.id), vaultDoc);
                 }
                 await saveFileToLocalVault(vaultDoc, file);
-                fetchTimeline(); // Refresh timeline
-                alert(`Analyzed & Saved: ${vaultDoc.type}`);
+
+                // 2. Create distinct Log Entries for the extracted events
+                if (analysis.timelineEvents && Array.isArray(analysis.timelineEvents)) {
+                    const newLogs: LogEntry[] = analysis.timelineEvents.map((evt: any, i: number) => ({
+                        id: Date.now().toString() + i,
+                        date: evt.date,
+                        time: "09:00", // default
+                        type: evt.type || "Other",
+                        description: evt.description + ` (Source: ${file.name})`,
+                        peopleInvolved: "",
+                        createdAt: new Date().toISOString(),
+                        isPublic: false,
+                        sourceDocId: vaultDoc.id
+                    }));
+                    
+                    setLogs(prev => [...newLogs, ...prev]);
+                    alert(`Found ${newLogs.length} events in document and added to timeline!`);
+                } else {
+                     fetchTimeline(); // Just refresh if no granular events found
+                     alert(`Analyzed & Saved: ${vaultDoc.type}`);
+                }
             } catch (err) {
                 console.error(err);
                 alert("Analysis failed.");
@@ -856,13 +896,35 @@ const CaseJournal: React.FC = () => {
             type: newLog.type as any,
             description: newLog.description,
             peopleInvolved: newLog.people,
-            createdAt: new Date().toISOString()
+            createdAt: new Date().toISOString(),
+            isPublic: false
         };
         setLogs([entry, ...logs]);
         setNewLog({ type: 'Phone Call', description: '', people: '' });
     };
 
-    const polishWithAI = async () => {
+    const togglePublic = async (id: string, isDoc: boolean, currentVal: boolean) => {
+        if (isDoc) {
+             // Update Doc in Vault/DB
+             // For local demo, we just update local file metadata? 
+             // Since we re-fetch from Vault, we need to update the Vault DB.
+             const db = await openVaultDB();
+             const tx = db.transaction(STORE_NAME, 'readwrite');
+             const store = tx.objectStore(STORE_NAME);
+             const req = store.get(id);
+             req.onsuccess = () => {
+                 const data = req.result;
+                 data.isPublic = !currentVal;
+                 store.put(data);
+                 fetchTimeline(); // Refresh UI
+             };
+        } else {
+            // Update Log
+            setLogs(logs.map(l => l.id === id ? { ...l, isPublic: !currentVal } : l));
+        }
+    };
+
+    const polishWithAI = async () => { /* ... existing ... */
         if (!newLog.description) return;
         setIsPolishing(true);
         try {
@@ -873,14 +935,10 @@ const CaseJournal: React.FC = () => {
             if (result.text) {
                 setNewLog(prev => ({ ...prev, description: result.text! }));
             }
-        } catch (e) {
-            console.error(e);
-        } finally {
-            setIsPolishing(false);
-        }
+        } catch (e) { console.error(e); } finally { setIsPolishing(false); }
     };
 
-    const exportPDF = () => {
+    const exportPDF = () => { /* ... existing ... */
         const doc = new jsPDF();
         doc.setFontSize(16);
         doc.text("Case Timeline & Evidence Log", 10, 10);
@@ -921,6 +979,11 @@ const CaseJournal: React.FC = () => {
                     <button className="button-secondary" onClick={exportPDF}>Export PDF</button>
                 </div>
             </div>
+            
+            <p style={{fontSize:'0.85rem', color: '#666'}}>
+                Click the Globe 🌍 icon to toggle an event as "Public" for your campaign website. 
+                Upload documents with multiple events to auto-parse them.
+            </p>
 
             <div className="form-grid" style={{ backgroundColor: '#f8f9fa', padding: '1rem', borderRadius: '8px', marginBottom: '2rem' }}>
                 <h4 style={{ margin: '0 0 0.5rem 0' }}>Add New Event Log</h4>
@@ -943,7 +1006,7 @@ const CaseJournal: React.FC = () => {
                         <div style={{ position: 'relative' }}>
                             <input type="file" id="timeline-upload" style={{display:'none'}} onChange={handleDocUpload} accept=".pdf,image/*" />
                             <label htmlFor="timeline-upload" className="button-secondary" style={{ cursor: 'pointer', fontSize: '0.85rem' }}>
-                                {analyzingDoc ? 'Analyzing...' : '➕ Upload Document'}
+                                {analyzingDoc ? 'Parsing Events...' : '➕ Upload Document'}
                             </label>
                         </div>
                     </div>
@@ -957,10 +1020,11 @@ const CaseJournal: React.FC = () => {
                     if (filter === 'docs' && item.timelineType !== 'doc') return null;
 
                     const isDoc = item.timelineType === 'doc';
+                    const isPublic = item.isPublic || false;
 
                     return (
                         <div key={item.id || i} className="journal-entry" style={{ borderLeft: isDoc ? '4px solid #715573' : '1px solid #e1e2ec' }}>
-                            <div className="journal-meta">
+                            <div className="journal-meta" style={{width: '100%'}}>
                                 <span className="journal-badge" style={{ backgroundColor: isDoc ? '#fbd7fc' : '#dbe2f9', color: isDoc ? '#29132d' : '#141b2c' }}>
                                     {isDoc ? `📄 ${item.type}` : item.type}
                                 </span>
@@ -968,6 +1032,22 @@ const CaseJournal: React.FC = () => {
                                     {isDoc ? new Date(item.date).toLocaleDateString() : `${item.date} at ${item.time}`}
                                 </span>
                                 {!isDoc && item.peopleInvolved && <span style={{ fontSize: '0.85rem', fontStyle: 'italic' }}>with {item.peopleInvolved}</span>}
+                                
+                                <button 
+                                    onClick={() => togglePublic(item.id, isDoc, isPublic)}
+                                    style={{ 
+                                        marginLeft: 'auto', 
+                                        background: 'none', 
+                                        border: 'none', 
+                                        cursor: 'pointer', 
+                                        fontSize: '1.2rem',
+                                        opacity: isPublic ? 1 : 0.3,
+                                        filter: isPublic ? 'none' : 'grayscale(100%)'
+                                    }}
+                                    title={isPublic ? "Public on Website" : "Private (Click to Publish)"}
+                                >
+                                    🌍
+                                </button>
                             </div>
                             <p className="journal-description">
                                 {isDoc ? (
@@ -987,7 +1067,8 @@ const CaseJournal: React.FC = () => {
 };
 
 const ExpensesTracker: React.FC = () => {
-    const [expenses, setExpenses] = useState<ExpenseEntry[]>([]);
+   // ... (No changes needed here)
+   const [expenses, setExpenses] = useState<ExpenseEntry[]>([]);
     const [newExp, setNewExp] = useState<Partial<ExpenseEntry>>({ category: 'Legal', currency: 'USD' });
 
     useEffect(() => {
@@ -1058,6 +1139,7 @@ const ExpensesTracker: React.FC = () => {
 };
 
 const KnowledgeBaseBuilder: React.FC = () => {
+    // ... (No changes needed here)
     const [search, setSearch] = useState('');
     // Comprehensive mock data
     const entries: KnowledgeBaseEntry[] = [
@@ -1102,6 +1184,7 @@ const KnowledgeBaseBuilder: React.FC = () => {
 };
 
 const LiveGuide: React.FC = () => {
+    // ... (Same as before)
     const [connected, setConnected] = useState(false);
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const [logs, setLogs] = useState<string[]>([]);
@@ -1162,7 +1245,6 @@ const LiveGuide: React.FC = () => {
     };
 
     const interrupt = () => {
-        // Force a turn completion or send an empty text trigger to nudge the model
         if (websocketRef.current?.readyState === WebSocket.OPEN) {
             websocketRef.current.send(JSON.stringify({ client_content: { turns: [{ role: "user", parts: [{ text: " " }] }], turn_complete: true } }));
             setLogs(prev => [...prev, "Sent nudge..."]);
@@ -1224,6 +1306,7 @@ const LiveGuide: React.FC = () => {
 };
 
 const CorrespondenceHelper: React.FC<{ profile: CaseProfile }> = ({ profile }) => {
+    // ... (Same as before)
     const [draft, setDraft] = useState('');
     const [recipient, setRecipient] = useState('');
     const [topic, setTopic] = useState('');
@@ -1347,9 +1430,16 @@ const CaseSettings: React.FC<{ profile: CaseProfile, setProfile: (p: CaseProfile
         alert("Profile Updated");
     };
 
+    const clearData = () => {
+        if (confirm("Are you sure you want to wipe all local data? This cannot be undone.")) {
+            localStorage.clear();
+            window.location.reload();
+        }
+    };
+
     return (
         <div className="tool-card" style={{ cursor: 'default' }}>
-            <h2>Case Profile & IDs</h2>
+            <h2>Case Profile & Settings</h2>
             
             <div className="form-grid" style={{ marginBottom: '2rem', paddingBottom: '2rem', borderBottom: '1px solid #eee' }}>
                 <div>
@@ -1372,32 +1462,37 @@ const CaseSettings: React.FC<{ profile: CaseProfile, setProfile: (p: CaseProfile
             </div>
 
             <h3>Case IDs</h3>
-            <div className="form-grid">
+            <div className="form-grid" style={{ marginBottom: '2rem', paddingBottom: '2rem', borderBottom: '1px solid #eee' }}>
                 <input type="text" placeholder="Agency (e.g. FBI)" value={newKey} onChange={e => setNewKey(e.target.value)} />
                 <input type="text" placeholder="Case Number" value={newVal} onChange={e => setNewVal(e.target.value)} />
                 <button className="button-secondary" onClick={addNum}>Add ID</button>
+                <div className="id-list full-width">
+                    {Object.entries(nums).map(([k, v]) => (
+                        <div key={k} style={{ padding: '0.5rem', borderBottom: '1px solid #eee' }}><strong>{k}:</strong> {v}</div>
+                    ))}
+                </div>
             </div>
-            <div className="id-list">
-                {Object.entries(nums).map(([k, v]) => (
-                    <div key={k} style={{ padding: '0.5rem', borderBottom: '1px solid #eee' }}><strong>{k}:</strong> {v}</div>
-                ))}
+
+            <h3>Data Management</h3>
+            <div style={{ padding: '1rem', border: '1px solid #ffccbc', backgroundColor: '#fff3e0', borderRadius: '8px' }}>
+                <h4 style={{ color: '#d84315', marginTop: 0 }}>Danger Zone</h4>
+                <p>This will permanently delete all Case Profiles, Journals, and Checklists stored on this browser.</p>
+                <button className="button-danger" onClick={clearData}>Wipe All Local Data</button>
             </div>
         </div>
     );
 };
 
 const CampaignSiteBuilder: React.FC<{ profile: CaseProfile }> = ({ profile }) => {
+    // ... (Same state setup as before)
     const [story, setStory] = useState('');
     const [photo, setPhoto] = useState<string | null>(null);
     const [publishedUrl, setPublishedUrl] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
     const [drafting, setDrafting] = useState(false);
     const [showPreview, setShowPreview] = useState(false);
-    
     const [email, setEmail] = useState('');
     const [phone, setPhone] = useState('');
-    
-    // New fields
     const [missingCaseNumber, setMissingCaseNumber] = useState('');
     const [links, setLinks] = useState<{label: string, url: string}[]>([]);
     const [newLinkLabel, setNewLinkLabel] = useState('');
@@ -1416,23 +1511,18 @@ const CampaignSiteBuilder: React.FC<{ profile: CaseProfile }> = ({ profile }) =>
                 const base64 = await fileToBase64(e.target.files[0]);
                 const compressed = await resizeImage(base64);
                 setPhoto(compressed);
-            } catch (err) {
-                console.error(err);
-            }
+            } catch (err) { console.error(err); }
         }
     };
 
     const handleAddLink = () => {
         if(newLinkLabel && newLinkUrl) {
             setLinks([...links, { label: newLinkLabel, url: newLinkUrl.startsWith('http') ? newLinkUrl : 'https://' + newLinkUrl }]);
-            setNewLinkLabel('');
-            setNewLinkUrl('');
+            setNewLinkLabel(''); setNewLinkUrl('');
         }
     };
     
-    const handleRemoveLink = (idx: number) => {
-        setLinks(links.filter((_, i) => i !== idx));
-    };
+    const handleRemoveLink = (idx: number) => setLinks(links.filter((_, i) => i !== idx));
 
     const handleAutoDraft = async () => {
         setDrafting(true);
@@ -1462,11 +1552,7 @@ const CampaignSiteBuilder: React.FC<{ profile: CaseProfile }> = ({ profile }) =>
                  contents: prompt
              });
              if (result.text) setStory(result.text);
-        } catch (e) {
-            console.error(e);
-        } finally {
-            setDrafting(false);
-        }
+        } catch (e) { console.error(e); } finally { setDrafting(false); }
     };
 
     const publish = async () => {
@@ -1479,11 +1565,19 @@ const CampaignSiteBuilder: React.FC<{ profile: CaseProfile }> = ({ profile }) =>
                 try {
                     const cred = await signInAnonymously(auth);
                     uid = cred.user.uid;
-                } catch (authErr: any) {
-                    console.warn("Cloud Auth failed", authErr);
-                }
+                } catch (authErr: any) { console.warn("Cloud Auth failed", authErr); }
             }
             
+            // Collect Public Timeline Items
+            const savedLogs = localStorage.getItem('caseLogs');
+            let publicTimeline: any[] = [];
+            if (savedLogs) {
+                const logs = JSON.parse(savedLogs);
+                publicTimeline = logs
+                    .filter((l: LogEntry) => l.isPublic)
+                    .map((l: LogEntry) => ({ date: l.date, title: l.type, description: l.description }));
+            }
+
             const id = 'CASE_' + (profile.childName.replace(/\s/g, '_') || 'UNNAMED') + '_' + Date.now();
             const campaignData = {
                 childName: profile.childName,
@@ -1495,6 +1589,7 @@ const CampaignSiteBuilder: React.FC<{ profile: CaseProfile }> = ({ profile }) =>
                 contactPhone: phone,
                 missingCaseNumber,
                 links,
+                timeline: publicTimeline,
                 createdAt: new Date().toISOString(),
                 ownerUid: uid || 'local_user'
             };
@@ -1503,9 +1598,7 @@ const CampaignSiteBuilder: React.FC<{ profile: CaseProfile }> = ({ profile }) =>
                 try {
                     await setDoc(doc(db, 'campaigns', id), campaignData);
                     dbWriteSuccess = true;
-                } catch (dbErr) {
-                     console.warn("Firestore write failed", dbErr);
-                }
+                } catch (dbErr) { console.warn("Firestore write failed", dbErr); }
             }
 
             localStorage.setItem(`LOCAL_CAMPAIGN_${id}`, JSON.stringify(campaignData));
@@ -1526,10 +1619,18 @@ const CampaignSiteBuilder: React.FC<{ profile: CaseProfile }> = ({ profile }) =>
     };
     
     if (showPreview) {
+        const savedLogs = localStorage.getItem('caseLogs');
+        let publicTimeline: any[] = [];
+        if (savedLogs) {
+            publicTimeline = JSON.parse(savedLogs)
+                .filter((l: LogEntry) => l.isPublic)
+                .map((l: LogEntry) => ({ date: l.date, title: l.type, description: l.description }));
+        }
+
         const previewData = {
             childName: profile.childName,
             story, photo, fromCountry: profile.fromCountry, toCountry: profile.toCountry, contactEmail: email, contactPhone: phone,
-            missingCaseNumber, links
+            missingCaseNumber, links, timeline: publicTimeline
         };
         return (
             <div className="tool-card">
@@ -1547,14 +1648,12 @@ const CampaignSiteBuilder: React.FC<{ profile: CaseProfile }> = ({ profile }) =>
     return (
         <div className="tool-card" style={{ cursor: 'default' }}>
             <h2>Campaign Website Builder (Hosted)</h2>
-            <p>Create and host a public webpage for your case instantly. Share this link with press and social media.</p>
             
             <label style={{ display: 'block', marginBottom: '0.5rem' }}><strong>1. Hero Photo</strong></label>
             <input type="file" accept="image/*" onChange={handleImageUpload} />
             {photo && <img src={photo} style={{ width: '100%', maxHeight: '200px', objectFit: 'cover', marginTop: '0.5rem', borderRadius: '8px' }} />}
             
             <label style={{ display: 'block', marginTop: '1.5rem', marginBottom: '0.5rem' }}><strong>2. Public Story & Details</strong></label>
-            <p style={{ fontSize: '0.8rem', color: '#666' }}>We read your Vault documents to help draft this accurately.</p>
             <textarea placeholder="Write your public story here..." value={story} onChange={e => setStory(e.target.value)} rows={6} className="full-width" />
             <button className="button-ai" onClick={handleAutoDraft} disabled={drafting} style={{ marginTop: '0.5rem' }}>
                 {drafting ? 'Reading Docs & Drafting...' : '✨ Auto-Draft with AI'}
@@ -1565,27 +1664,30 @@ const CampaignSiteBuilder: React.FC<{ profile: CaseProfile }> = ({ profile }) =>
                 <input type="text" value={missingCaseNumber} onChange={e => setMissingCaseNumber(e.target.value)} placeholder="e.g. NCMEC #123456" />
             </div>
             
-            <label style={{ display: 'block', marginTop: '1.5rem', marginBottom: '0.5rem' }}><strong>3. Public Contact Info (Call to Action)</strong></label>
+            <label style={{ display: 'block', marginTop: '1.5rem', marginBottom: '0.5rem' }}><strong>3. Public Contact Info</strong></label>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                <input type="email" placeholder="Public Email (e.g. find.charlotte@gmail.com)" value={email} onChange={e => setEmail(e.target.value)} />
-                <input type="tel" placeholder="Public Phone (Optional)" value={phone} onChange={e => setPhone(e.target.value)} />
+                <input type="email" placeholder="Public Email" value={email} onChange={e => setEmail(e.target.value)} />
+                <input type="tel" placeholder="Public Phone" value={phone} onChange={e => setPhone(e.target.value)} />
             </div>
-            <p style={{ fontSize: '0.8rem', color: '#666' }}>Leave blank if you don't want to share contact info.</p>
 
             <label style={{ display: 'block', marginTop: '1.5rem', marginBottom: '0.5rem' }}><strong>4. Useful Links (Link Tree)</strong></label>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: '0.5rem' }}>
-                <input type="text" placeholder="Label (e.g. GoFundMe)" value={newLinkLabel} onChange={e => setNewLinkLabel(e.target.value)} />
-                <input type="text" placeholder="URL (e.g. gofundme.com/...)" value={newLinkUrl} onChange={e => setNewLinkUrl(e.target.value)} />
+                <input type="text" placeholder="Label" value={newLinkLabel} onChange={e => setNewLinkLabel(e.target.value)} />
+                <input type="text" placeholder="URL" value={newLinkUrl} onChange={e => setNewLinkUrl(e.target.value)} />
                 <button className="button-secondary" onClick={handleAddLink}>Add</button>
             </div>
             <div style={{ marginTop: '0.5rem' }}>
                 {links.map((l, i) => (
                     <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.5rem', backgroundColor: '#f0f0f0', marginBottom: '0.25rem', borderRadius: '4px' }}>
-                        <span>{l.label} ({l.url})</span>
+                        <span>{l.label}</span>
                         <button onClick={() => handleRemoveLink(i)} style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'red' }}>x</button>
                     </div>
                 ))}
             </div>
+
+             <p style={{marginTop: '1.5rem', fontSize: '0.85rem', color: '#666'}}>
+                <strong>Note:</strong> To include a Case Timeline on your public site, go to the "Evidence" tab and toggle specific events to "Public" (Green Globe).
+            </p>
 
             <div style={{ display: 'flex', gap: '1rem', marginTop: '2rem' }}>
                 <button className="button-secondary" onClick={() => setShowPreview(true)}>Preview Site</button>
@@ -1612,9 +1714,7 @@ const PublicCampaignViewer: React.FC<{ id: string, previewData?: any }> = ({ id,
     const [error, setError] = useState('');
 
     useEffect(() => {
-        if (data) {
-            document.title = `MISSING CHILD: ${data.childName} | Help Bring Them Home`;
-        }
+        if (data) document.title = `MISSING CHILD: ${data.childName}`;
     }, [data]);
 
     useEffect(() => {
@@ -1633,15 +1733,13 @@ const PublicCampaignViewer: React.FC<{ id: string, previewData?: any }> = ({ id,
                         setLoading(false);
                         return;
                     }
-                } catch (err) {
-                    console.warn("Firestore read failed, checking local storage", err);
-                }
+                } catch (err) { console.warn("Firestore read failed", err); }
 
                 const local = localStorage.getItem(`LOCAL_CAMPAIGN_${id}`);
                 if (local) {
                     setData(JSON.parse(local));
                 } else {
-                    setError("Campaign not found. (Check internet connection if this is a remote link)");
+                    setError("Campaign not found.");
                 }
             } catch (e) {
                 console.error(e);
@@ -1691,6 +1789,24 @@ const PublicCampaignViewer: React.FC<{ id: string, previewData?: any }> = ({ id,
                         {data.links.map((l: any, i: number) => (
                             <a key={i} href={l.url} target="_blank" className="button-primary full-width" style={{ textAlign: 'center', textDecoration: 'none' }}>{l.label}</a>
                         ))}
+                    </div>
+                )}
+
+                {/* PUBLIC TIMELINE */}
+                {data.timeline && data.timeline.length > 0 && (
+                    <div style={{ margin: '2rem 0', textAlign: 'left', borderTop: '2px solid #eee', paddingTop: '2rem' }}>
+                        <h3 style={{ textAlign: 'center', textTransform: 'uppercase', color: '#333', marginBottom: '1.5rem' }}>Case Timeline</h3>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                            {data.timeline.map((t: any, i: number) => (
+                                <div key={i} style={{ display: 'flex', gap: '1rem', borderLeft: '3px solid #d32f2f', paddingLeft: '1rem' }}>
+                                    <div style={{ fontWeight: 'bold', minWidth: '100px', fontSize: '0.9rem', color: '#555' }}>{t.date}</div>
+                                    <div>
+                                        <div style={{ fontWeight: 'bold', textTransform: 'uppercase', fontSize: '0.85rem' }}>{t.title}</div>
+                                        <div style={{ fontSize: '0.95rem' }}>{t.description}</div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
                     </div>
                 )}
                 
@@ -1757,7 +1873,6 @@ const OnboardingWizard: React.FC<{ onComplete: (p: CaseProfile) => void }> = ({ 
             setAnalyzingDoc(true);
             const file = e.target.files[0];
             try {
-                // Use the same analysis pipeline as the Vault
                  const base64 = await fileToBase64(file);
                  const prompt = `
                  Analyze this legal document. Extract:
@@ -1790,7 +1905,6 @@ const OnboardingWizard: React.FC<{ onComplete: (p: CaseProfile) => void }> = ({ 
                     uploadedAt: new Date().toISOString()
                 };
                 
-                // Save to cloud if logged in, local if not
                 if (auth.currentUser) {
                     await setDoc(doc(db, `users/${auth.currentUser.uid}/documents`, vaultDoc.id), vaultDoc);
                 }
@@ -1937,79 +2051,59 @@ const App: React.FC = () => {
     const [items, setItems] = useState<ActionItem[]>([]);
     const [user, setUser] = useState<User | null>(null);
     const [isGeneratingPlan, setIsGeneratingPlan] = useState(false);
-    const [showUserMenu, setShowUserMenu] = useState(false);
 
     // --- CLOUD SYNC MANAGER ---
     const syncDataToCloud = async (profile: CaseProfile, tasks: ActionItem[]) => {
         if (!auth.currentUser) return;
         const uid = auth.currentUser.uid;
         try {
-            // Save Profile
             await setDoc(doc(db, `users/${uid}/profile/data`), profile);
-            // Save Tasks (batch)
             await setDoc(doc(db, `users/${uid}/data/tasks`), { items: tasks });
-        } catch (e) {
-            console.error("Sync failed", e);
-        }
+        } catch (e) { console.error("Sync failed", e); }
     };
 
     const loadDataFromCloud = async (uid: string) => {
         try {
-            // 1. Load Profile
             const profileSnap = await getDoc(doc(db, `users/${uid}/profile/data`));
             if (profileSnap.exists()) {
                 const data = profileSnap.data() as CaseProfile;
                 setCaseProfile(data);
-                // If profile exists, go to dashboard
                 if (data.isProfileComplete) setView('dashboard');
             }
-
-            // 2. Load Tasks
             const tasksSnap = await getDoc(doc(db, `users/${uid}/data/tasks`));
             if (tasksSnap.exists()) {
                 setItems(tasksSnap.data().items);
             }
-            
-            // 3. Documents are loaded by the DocumentVault component independently
-        } catch (e) {
-            console.error("Load failed", e);
-        }
+        } catch (e) { console.error("Load failed", e); }
     };
 
     useEffect(() => {
-        // Initial Local Load
         const saved = localStorage.getItem('recoveryHubProfile');
         if (saved) setCaseProfile(JSON.parse(saved));
         
         const savedItems = localStorage.getItem('recoveryHubItems');
         if (savedItems) setItems(JSON.parse(savedItems));
 
-        // Auth Listener
         const unsubscribe = onAuthStateChanged(auth, (u) => {
             setUser(u);
-            if (u) {
-                // User just logged in. Pull data from cloud.
-                // Note: We rely on cloud data overwriting local data if it exists.
-                loadDataFromCloud(u.uid);
-            }
+            if (u) { loadDataFromCloud(u.uid); }
         });
         return () => unsubscribe();
     }, []);
 
-    // Sync on Change (if logged in)
     useEffect(() => {
         if (caseProfile.isProfileComplete) {
             localStorage.setItem('recoveryHubProfile', JSON.stringify(caseProfile));
             if (user) syncDataToCloud(caseProfile, items);
         }
-    }, [caseProfile, user]); // Sync profile changes
+    }, [caseProfile, user]); 
 
     useEffect(() => {
         if (items.length > 0) {
             localStorage.setItem('recoveryHubItems', JSON.stringify(items));
              if (user) syncDataToCloud(caseProfile, items);
         }
-    }, [items, user]); // Sync task changes
+    }, [items, user]); 
 
     const handleSignIn = async () => {
         try {
@@ -2069,8 +2163,6 @@ const App: React.FC = () => {
             - "High": First week legal actions (Hague application, Lawyer retention).
             - "Medium": Evidence gathering and logistical support.
             - "Low": Long-term administrative tasks.
-            
-            Tailor the tasks specifically to the context provided (e.g. if medical issues are mentioned, add medical tasks).
             `;
 
             const result = await ai.models.generateContent({
@@ -2110,14 +2202,12 @@ const App: React.FC = () => {
             }
         } catch (e) {
             console.error("Failed to generate plan", e);
-            // Fallback only if AI fails completely
             setItems([{ id: '1', category: 'Legal', task: 'File Police Report', description: 'Go to local station immediately.', priority: 'Immediate', completed: false }]);
         } finally {
             setIsGeneratingPlan(false);
         }
     };
 
-    // Check for Public Campaign URL
     const [publicCampaignId, setPublicCampaignId] = useState<string | null>(null);
     useEffect(() => {
         const params = new URLSearchParams(window.location.search);
