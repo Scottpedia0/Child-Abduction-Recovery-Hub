@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { createRoot } from 'react-dom/client';
 import { GoogleGenAI, Type, LiveServerMessage, Modality, FunctionDeclaration } from "@google/genai";
@@ -38,6 +37,7 @@ interface DossierData {
 
 interface CaseProfile {
     childName: string;
+    childDOB?: string; // Added for quick copy
     fromCountry: string;
     toCountry: string;
     abductionDate: string;
@@ -104,7 +104,7 @@ interface KnowledgeBaseEntry {
     phone?: string;
     useCase?: string;
     instructions?: string;
-    template?: string;
+    fullText?: string; // Added for deep content viewing
     tags?: string[];
 }
 
@@ -133,7 +133,8 @@ const getRagContext = async (): Promise<string> => {
     try {
         const docs = await getFilesFromLocalVault();
         if (docs.length > 0) {
-             const context = docs.map(d => `[DOCUMENT: ${d.type} (${d.date})] \nSummary: ${d.summary} \nContent Snippet: ${d.extractedText?.substring(0, 500)}...`).join('\n\n');
+             // Increased context limit to 2000 chars for better RAG
+             const context = docs.map(d => `[DOCUMENT: ${d.type} (${d.date})] \nSummary: ${d.summary} \nContent Snippet: ${d.extractedText?.substring(0, 2000)}...`).join('\n\n');
              return context ? `\n\n--- REFERENCE DOCUMENTS (RAG CONTEXT) ---\n${context}\n--------------------------------------\n` : '';
         }
         return '';
@@ -282,6 +283,39 @@ const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 // --- COMPONENTS ---
 
+// --- NEW COMPONENT: Quick Copy Card ---
+const QuickCopyCard: React.FC<{ profile: CaseProfile }> = ({ profile }) => {
+    const copyToClipboard = (text: string, label: string) => {
+        if (!text) return;
+        navigator.clipboard.writeText(text);
+        alert(`Copied ${label} to clipboard`);
+    };
+
+    return (
+        <div className="tool-card" style={{ cursor: 'default', padding: '1rem', marginBottom: '1rem' }}>
+            <h3 style={{ fontSize: '1rem', marginTop: 0 }}>📇 Case Reference Card</h3>
+            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                <button className="button-secondary" style={{ fontSize: '0.8rem', padding: '0.25rem 0.75rem' }} onClick={() => copyToClipboard(profile.childName, "Child Name")}>
+                    Child: {profile.childName} 📋
+                </button>
+                {profile.childDOB && (
+                    <button className="button-secondary" style={{ fontSize: '0.8rem', padding: '0.25rem 0.75rem' }} onClick={() => copyToClipboard(profile.childDOB!, "DOB")}>
+                        DOB: {profile.childDOB} 📋
+                    </button>
+                )}
+                <button className="button-secondary" style={{ fontSize: '0.8rem', padding: '0.25rem 0.75rem' }} onClick={() => copyToClipboard(profile.abductionDate, "Abduction Date")}>
+                    Taken: {profile.abductionDate} 📋
+                </button>
+                {Object.entries(profile.caseNumbers || {}).map(([key, val]) => (
+                     <button key={key} className="button-secondary" style={{ fontSize: '0.8rem', padding: '0.25rem 0.75rem', borderColor: '#005ac1', color: '#005ac1' }} onClick={() => copyToClipboard(val, key)}>
+                        {key}: {val} 📋
+                    </button>
+                ))}
+            </div>
+        </div>
+    );
+};
+
 const IntelligenceBriefWidget: React.FC<{ profile: CaseProfile, onUpdate: (d: DossierData) => void }> = ({ profile, onUpdate }) => {
     const [loading, setLoading] = useState(false);
     const [viewIndex, setViewIndex] = useState(0);
@@ -295,7 +329,7 @@ const IntelligenceBriefWidget: React.FC<{ profile: CaseProfile, onUpdate: (d: Do
         try {
             // Get recent logs for context
             const savedLogs = localStorage.getItem('caseLogs');
-            let recentContext = "No recent logs available.";
+            let recentContext: string = "No recent logs available.";
             if (savedLogs) {
                 const logs: LogEntry[] = JSON.parse(savedLogs);
                 recentContext = logs.slice(0, 5).map(l => `- ${l.date}: ${l.description}`).join('\n');
@@ -336,7 +370,8 @@ const IntelligenceBriefWidget: React.FC<{ profile: CaseProfile, onUpdate: (d: Do
                 }
             });
 
-            const data = JSON.parse(result.text || "{}");
+            const text = result.text;
+            const data = text ? JSON.parse(text) : {};
             const newDossier = { ...data, dateGenerated: new Date().toLocaleString() };
             onUpdate(newDossier);
             setViewIndex(0); // Reset view to newest
@@ -399,7 +434,6 @@ const IntelligenceBriefWidget: React.FC<{ profile: CaseProfile, onUpdate: (d: Do
 };
 
 const CriticalTasksWidget: React.FC<{ items: ActionItem[], onStart: () => void, isGenerating: boolean, onBrainstorm: () => void }> = ({ items, onStart, isGenerating, onBrainstorm }) => {
-   // ... (Same as before)
     const incomplete = items.filter(i => !i.completed);
     const topTasks = incomplete.filter(i => i.priority === 'Immediate' || i.priority === 'High').slice(0, 3);
     const nextTasks = incomplete.filter(i => i.priority !== 'Immediate' && i.priority !== 'High').slice(0, 3);
@@ -449,7 +483,6 @@ const CriticalTasksWidget: React.FC<{ items: ActionItem[], onStart: () => void, 
 };
 
 const SimilarCasesWidget: React.FC<{ from: string, to: string }> = ({ from, to }) => {
-    // ... (Same as before)
     const [stories, setStories] = useState<{ title: string; url: string; source: string }[]>([]);
     const [loading, setLoading] = useState(true);
 
@@ -509,7 +542,6 @@ const SimilarCasesWidget: React.FC<{ from: string, to: string }> = ({ from, to }
 };
 
 const TaskBrainstormer: React.FC<{ profile: CaseProfile, onAddTask: (task: ActionItem) => void }> = ({ profile, onAddTask }) => {
-    // ... (Same as before)
     const [input, setInput] = useState('');
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [loading, setLoading] = useState(false);
@@ -566,7 +598,8 @@ const TaskBrainstormer: React.FC<{ profile: CaseProfile, onAddTask: (task: Actio
                 }
             });
 
-            const data = JSON.parse(result.text || "{}");
+            const text = result.text;
+            const data = text ? JSON.parse(text) : {};
             const aiMsg: ChatMessage = {
                 role: 'ai',
                 text: data.reply,
@@ -638,16 +671,70 @@ const TaskBrainstormer: React.FC<{ profile: CaseProfile, onAddTask: (task: Actio
     );
 };
 
+// ... (rest of the file)
 const MyChecklist: React.FC<{ items: ActionItem[]; setItems: React.Dispatch<React.SetStateAction<ActionItem[]>>; onOpenBrainstorm: () => void }> = ({ items, setItems, onOpenBrainstorm }) => {
-    // ... (Same as before)
     const toggleItem = (id: string) => {
         setItems(prev => prev.map(i => i.id === id ? { ...i, completed: !i.completed } : i));
     };
+
+    const exportTasksPDF = () => {
+        const doc = new jsPDF();
+        doc.setFontSize(20);
+        doc.setTextColor(0, 90, 193); // Primary Blue
+        doc.text("Recovery Plan of Action", 10, 20);
+        doc.setFontSize(12);
+        doc.setTextColor(0, 0, 0);
+        doc.text(`Generated: ${new Date().toLocaleDateString()}`, 10, 30);
+        
+        let y = 40;
+        
+        const categories = ['Immediate', 'High', 'Medium', 'Low'];
+        
+        categories.forEach(prio => {
+            const tasks = items.filter(i => i.priority === prio);
+            if (tasks.length > 0) {
+                doc.setFontSize(14);
+                doc.setFillColor(240, 240, 240);
+                doc.rect(10, y-5, 190, 8, 'F');
+                doc.setTextColor(0,0,0);
+                doc.setFont("helvetica", "bold");
+                doc.text(`${prio.toUpperCase()} PRIORITY`, 12, y);
+                y += 10;
+                
+                tasks.forEach(item => {
+                    doc.setFont("helvetica", "bold");
+                    doc.setFontSize(11);
+                    const check = item.completed ? "[X]" : "[ ]";
+                    doc.text(`${check} ${item.task}`, 15, y);
+                    y += 5;
+                    
+                    doc.setFont("helvetica", "normal");
+                    doc.setFontSize(10);
+                    doc.setTextColor(80, 80, 80);
+                    const lines = doc.splitTextToSize(item.description, 170);
+                    doc.text(lines, 20, y);
+                    y += (lines.length * 5) + 5;
+                    
+                    if (y >= 270) {
+                        doc.addPage();
+                        y = 20;
+                    }
+                });
+                y += 5;
+            }
+        });
+        
+        doc.save("Action_Plan.pdf");
+    };
+
     return (
         <div className="tool-card" style={{ cursor: 'default' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <h2>Universal Action Plan</h2>
-                <button className="button-secondary" onClick={onOpenBrainstorm}>💡 Brainstorm Tasks</button>
+                <div style={{display: 'flex', gap: '0.5rem'}}>
+                    <button className="button-secondary" onClick={exportTasksPDF}>🖨️ Export Plan</button>
+                    <button className="button-secondary" onClick={onOpenBrainstorm}>💡 Brainstorm Tasks</button>
+                </div>
             </div>
             <div className="items-list">
                 {items.map(item => (
@@ -708,7 +795,8 @@ const DocumentVault: React.FC = () => {
                 config: { responseMimeType: "application/json" }
             });
 
-            const analysis = JSON.parse(result.text || "{}");
+            const text = result.text;
+            const analysis = text ? JSON.parse(text) : {};
             
             const docData: VaultDocument = {
                 id: Date.now().toString(),
@@ -864,7 +952,8 @@ const CaseJournal: React.FC = () => {
                     ],
                     config: { responseMimeType: "application/json" }
                  });
-                 const analysis = JSON.parse(result.text || "{}");
+                 const text = result.text;
+                 const analysis = text ? JSON.parse(text) : {};
                  
                  // 1. Create the Main Vault Doc
                  const vaultDoc: VaultDocument = {
@@ -953,7 +1042,7 @@ const CaseJournal: React.FC = () => {
         }
     };
 
-    const polishWithAI = async () => { /* ... existing ... */
+    const polishWithAI = async () => {
         if (!newLog.description) return;
         setIsPolishing(true);
         try {
@@ -967,27 +1056,60 @@ const CaseJournal: React.FC = () => {
         } catch (e) { console.error(e); } finally { setIsPolishing(false); }
     };
 
-    const exportPDF = () => { /* ... existing ... */
+    const exportPDF = () => {
         const doc = new jsPDF();
-        doc.setFontSize(16);
-        doc.text("Case Timeline & Evidence Log", 10, 10);
-        let y = 20;
+        
+        // Title Page / Header
+        doc.setFontSize(22);
+        doc.setTextColor(0, 90, 193);
+        doc.text("Case Timeline & Evidence Log", 10, 20);
+        
+        doc.setFontSize(10);
+        doc.setTextColor(100, 100, 100);
+        doc.text(`Generated: ${new Date().toLocaleDateString()}`, 10, 28);
+        
+        let y = 40;
+        
+        doc.setLineWidth(0.5);
+        doc.setDrawColor(200, 200, 200);
+        doc.line(10, 32, 200, 32);
+
         timelineItems.forEach(item => {
             if (filter === 'logs' && item.timelineType !== 'log') return;
             if (filter === 'docs' && item.timelineType !== 'doc') return;
 
+            const isDoc = item.timelineType === 'doc';
+            const dateStr = isDoc ? new Date(item.date).toLocaleDateString() : `${item.date}`;
+            const typeStr = isDoc ? item.type.toUpperCase() : item.type.toUpperCase();
+            
+            // Date Column
+            doc.setFontSize(11);
+            doc.setTextColor(0, 0, 0);
+            doc.setFont("helvetica", "bold");
+            doc.text(dateStr, 10, y);
+            
+            // Type Badge representation
+            doc.setFillColor(isDoc ? 230 : 245, isDoc ? 230 : 245, isDoc ? 250 : 255);
+            doc.rect(40, y-4, 160, 8, 'F');
+            
+            doc.setFontSize(9);
+            doc.setTextColor(isDoc ? 50 : 100, isDoc ? 0 : 50, isDoc ? 100 : 150);
+            doc.text(typeStr, 42, y+1);
+            
+            y += 6;
+            
+            // Description
+            doc.setFont("helvetica", "normal");
+            doc.setTextColor(0, 0, 0);
             doc.setFontSize(10);
-            const dateStr = item.timelineType === 'log' ? `${item.date} ${item.time}` : new Date(item.date).toLocaleDateString();
-            const typeStr = item.timelineType === 'log' ? item.type : `DOCUMENT: ${item.type}`;
             
-            doc.text(`${dateStr} - ${typeStr}`, 10, y);
-            y += 5;
-            const desc = item.timelineType === 'log' ? item.description : `File: ${item.name}. Summary: ${item.summary}`;
-            const lines = doc.splitTextToSize(desc, 180);
-            doc.text(lines, 10, y);
-            y += (lines.length * 5) + 5;
+            const desc = isDoc ? `FILE: ${item.name}\nSUMMARY: ${item.summary}` : item.description;
+            const lines = doc.splitTextToSize(desc, 155);
+            doc.text(lines, 42, y);
             
-            if (y >= 280) {
+            y += (lines.length * 5) + 8;
+            
+            if (y >= 270) {
                 doc.addPage();
                 y = 20;
             }
@@ -1005,7 +1127,7 @@ const CaseJournal: React.FC = () => {
                         <option value="logs">Logs Only</option>
                         <option value="docs">Documents Only</option>
                     </select>
-                    <button className="button-secondary" onClick={exportPDF}>Export PDF</button>
+                    <button className="button-secondary" onClick={exportPDF}>🖨️ Export Log PDF</button>
                 </div>
             </div>
             
@@ -1174,25 +1296,26 @@ const ExpensesTracker: React.FC = () => {
 };
 
 const KnowledgeBaseBuilder: React.FC = () => {
-    // ... (No changes needed here)
     const [search, setSearch] = useState('');
-    // Comprehensive mock data
+    const [selectedEntry, setSelectedEntry] = useState<KnowledgeBaseEntry | null>(null);
+
+    // Comprehensive mock data with full text
     const entries: KnowledgeBaseEntry[] = [
-        { id: '1', entryType: 'resource', name: 'Hague Convention Text (Full)', countryPair: 'Global', resourceType: 'Legal Text', tags: ['Legal', 'Treaty', 'Official'], summary: 'Full text of the 1980 Hague Convention on the Civil Aspects of International Child Abduction.' },
-        { id: '2', entryType: 'guidance', name: 'US State Dept - IPCA Action Guide', countryPair: 'USA', resourceType: 'Guide', tags: ['USA', 'Government', 'First Steps'], summary: 'Official step-by-step guide from the Office of Children\'s Issues.' },
-        { id: '3', entryType: 'opsec', name: 'Digital Safety & Spyware Checklist', countryPair: 'Global', resourceType: 'Security', tags: ['Safety', 'Tech', 'Privacy'], summary: 'How to secure your devices and accounts from monitoring by an abductor.' },
-        { id: '4', entryType: 'resource', name: 'Reunite International (UK)', countryPair: 'UK', resourceType: 'NGO', tags: ['UK', 'Support', 'Legal Aid'], summary: 'Leading UK charity specializing in international parental child abduction.' },
-        { id: '5', entryType: 'template', name: 'Police Report Filing Template', countryPair: 'Global', resourceType: 'Template', tags: ['Police', 'Documentation'], summary: 'Standardized format for filing a missing child report to ensure all key details are recorded.' },
-        { id: '6', entryType: 'resource', name: 'NCMEC (National Center for Missing & Exploited Children)', countryPair: 'USA', resourceType: 'NGO', tags: ['USA', 'Support', 'Investigation'], summary: 'US-based organization providing resources and case management support.' },
-        { id: '7', entryType: 'guidance', name: 'Hague Article 28 - Sample Form', countryPair: 'Global', resourceType: 'Legal Form', tags: ['Legal', 'Hague', 'Forms'], summary: 'Sample application form for return under the Hague Convention.' },
-        { id: '8', entryType: 'resource', name: 'Interpol Yellow Notice Criteria', countryPair: 'Global', resourceType: 'Police', tags: ['Interpol', 'International'], summary: 'Requirements for issuing an Interpol Yellow Notice for a missing person.' },
-        { id: '9', entryType: 'guidance', name: 'Selecting a Foreign Attorney', countryPair: 'Global', resourceType: 'Guide', tags: ['Legal', 'Representation'], summary: 'Questions to ask when hiring a lawyer in the destination country.' },
-        { id: '10', entryType: 'prevention', name: 'Children\'s Passport Issuance Alert Program (CPIAP)', countryPair: 'USA', resourceType: 'Government', tags: ['USA', 'Prevention', 'Passport'], summary: 'US program to notify parents of passport applications for their children.' },
-        { id: '11', entryType: 'resource', name: 'International Child Abduction Remedies Act (ICARA)', countryPair: 'USA', resourceType: 'Legal Text', tags: ['USA', 'Legal', 'Statute'], summary: 'US federal law implementing the Hague Convention.' },
-        { id: '12', entryType: 'guidance', name: 'Japan - Hague Implementation Guide', countryPair: 'Japan', resourceType: 'Country Specific', tags: ['Japan', 'Asia', 'Hague'], summary: 'Specifics on how Japan implements the Hague Convention (since 2014).' },
-        { id: '13', entryType: 'template', name: 'Left-Behind Parent Statement', countryPair: 'Global', resourceType: 'Template', tags: ['Legal', 'Affidavit'], summary: 'Template for writing a personal impact statement for court.' },
-        { id: '14', entryType: 'resource', name: 'Global Legal Action Network', countryPair: 'Global', resourceType: 'NGO', tags: ['Legal', 'Human Rights'], summary: 'Network of lawyers supporting transnational human rights cases.' },
-        { id: '15', entryType: 'opsec', name: 'Secure Communication Tools', countryPair: 'Global', resourceType: 'Tech', tags: ['Safety', 'Tech'], summary: 'List of encrypted messaging apps and secure email providers.' }
+        { 
+            id: '1', entryType: 'resource', name: 'Hague Convention Text (Full)', countryPair: 'Global', resourceType: 'Legal Text', 
+            tags: ['Legal', 'Treaty', 'Official'], summary: 'Full text of the 1980 Hague Convention on the Civil Aspects of International Child Abduction.',
+            fullText: `(Sample Text - Full treaty would be here)\n\nArticle 1\nThe objects of the present Convention are:\na) to secure the prompt return of children wrongfully removed to or retained in any Contracting State;\nb) to ensure that rights of custody and of access under the law of one Contracting State are effectively respected in the other Contracting States.`
+        },
+        { 
+            id: '5', entryType: 'template', name: 'Police Report Filing Template', countryPair: 'Global', resourceType: 'Template', 
+            tags: ['Police', 'Documentation'], summary: 'Standardized format for filing a missing child report to ensure all key details are recorded.',
+            fullText: `MISSING CHILD REPORT - INITIAL INTAKE\n\n1. CHILD INFORMATION\nName: [Full Name]\nDOB: [Date]\nPassport #: [Number]\nLast Known Location: [Address/Country]\n\n2. ABDUCTOR INFORMATION\nName: [Name]\nRelationship: [Role]\nVehicle: [Make/Model/Plate]\n\n3. CIRCUMSTANCES\nDate/Time of Taking: [Time]\nCustody Order in Place? [Yes/No]\nDescription of Taking: [Details]\n\n4. JURISDICTION\n(Note to Officer: This is a parental abduction under federal law. Please enter child into NCIC as Missing Person - Endangered.)`
+        },
+        { 
+            id: '13', entryType: 'template', name: 'Left-Behind Parent Statement (Affidavit)', countryPair: 'Global', resourceType: 'Template', 
+            tags: ['Legal', 'Affidavit'], summary: 'Template for writing a personal impact statement for court.',
+            fullText: `AFFIDAVIT OF [YOUR NAME]\n\nI, [Your Name], being duly sworn, depose and state as follows:\n\n1. I am the [Mother/Father] of the minor child, [Child Name], born on [Date].\n2. On [Date], the child was habitually resident in [Home Country].\n3. I was exercising my custody rights at the time of the wrongful removal/retention.\n4. On [Date], the Respondent removed the child to [Foreign Country] without my consent.\n5. [Describe impact, lack of contact, and efforts to recover].\n\nI declare under penalty of perjury that the foregoing is true and correct.`
+        }
     ];
 
     const filtered = entries.filter(e => e.name.toLowerCase().includes(search.toLowerCase()) || e.tags?.some(t => t.toLowerCase().includes(search.toLowerCase())));
@@ -1200,11 +1323,11 @@ const KnowledgeBaseBuilder: React.FC = () => {
     return (
         <div className="tool-card" style={{ cursor: 'default' }}>
             <h2>Community Knowledge Base</h2>
-            <p>A curated library of legal texts, government guides, and operational security templates.</p>
+            <p>A curated library of legal texts, government guides, and operational security templates. Click to view full content.</p>
             <input type="text" placeholder="Search resources, guides, legal texts..." value={search} onChange={e => setSearch(e.target.value)} style={{ marginBottom: '1rem' }} />
             <div className="tools-grid">
                 {filtered.map(entry => (
-                    <div key={entry.id} className="dossier-card" style={{ minHeight: '180px' }}>
+                    <div key={entry.id} className="dossier-card" style={{ minHeight: '180px', cursor: 'pointer' }} onClick={() => setSelectedEntry(entry)}>
                         <div className="section-header">{entry.resourceType}</div>
                         <h4 style={{ margin: '0.5rem 0' }}>{entry.name}</h4>
                         <p style={{ fontSize: '0.85rem', color: '#555' }}>{entry.summary}</p>
@@ -1214,6 +1337,24 @@ const KnowledgeBaseBuilder: React.FC = () => {
                     </div>
                 ))}
             </div>
+
+            {selectedEntry && (
+                <div className="tour-backdrop" onClick={() => setSelectedEntry(null)}>
+                    <div className="tour-card" onClick={e => e.stopPropagation()} style={{ maxWidth: '800px', maxHeight: '80vh', overflowY: 'auto' }}>
+                        <div className="tour-header">
+                            <h3>{selectedEntry.name}</h3>
+                            <button className="tour-close" onClick={() => setSelectedEntry(null)}>×</button>
+                        </div>
+                        <div style={{ whiteSpace: 'pre-wrap', fontFamily: 'monospace', backgroundColor: '#f5f5f5', padding: '1rem', borderRadius: '8px', marginBottom: '1rem' }}>
+                            {selectedEntry.fullText || "Content preview not available in offline mode."}
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem' }}>
+                            <button className="button-secondary" onClick={() => navigator.clipboard.writeText(selectedEntry.fullText || '')}>Copy to Clipboard</button>
+                            <button className="button-primary" onClick={() => setSelectedEntry(null)}>Close</button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
@@ -1382,7 +1523,7 @@ const CorrespondenceHelper: React.FC<{ profile: CaseProfile }> = ({ profile }) =
                 model: "gemini-2.5-flash",
                 contents: prompt
             });
-            setDraft(result.text || '');
+            setDraft((result.text as string) || '');
         } catch (e) {
             console.error(e);
         } finally {
@@ -1465,6 +1606,52 @@ const CaseSettings: React.FC<{ profile: CaseProfile, setProfile: (p: CaseProfile
         alert("Profile Updated");
     };
 
+    const handlePrintSummary = () => {
+        const doc = new jsPDF();
+        
+        // Header
+        doc.setFontSize(20);
+        doc.setTextColor(179, 38, 30); // Crisis Red
+        doc.text("CASE SUMMARY: INTERNATIONAL ABDUCTION", 10, 20);
+        
+        // Child Info
+        doc.setFontSize(14);
+        doc.setTextColor(0,0,0);
+        doc.text(`Child: ${profile.childName}`, 10, 40);
+        if(profile.childDOB) doc.text(`DOB: ${profile.childDOB}`, 100, 40);
+        
+        doc.setFontSize(12);
+        doc.text(`Missing From: ${profile.fromCountry}`, 10, 55);
+        doc.text(`Taken To: ${profile.toCountry}`, 100, 55);
+        doc.text(`Date Taken: ${profile.abductionDate}`, 10, 65);
+        
+        // Case Numbers
+        doc.setFontSize(12);
+        doc.setFont("helvetica", "bold");
+        doc.text("CASE IDENTIFIERS:", 10, 85);
+        doc.setFont("helvetica", "normal");
+        
+        let y = 95;
+        Object.entries(profile.caseNumbers || {}).forEach(([k, v]) => {
+            doc.text(`${k}: ${v}`, 10, y);
+            y += 8;
+        });
+        
+        if(y < 95) y = 95;
+        
+        // Summary / Context
+        y += 10;
+        doc.setFont("helvetica", "bold");
+        doc.text("SITUATION SUMMARY:", 10, y);
+        y += 10;
+        doc.setFont("helvetica", "normal");
+        const summary = `${profile.childName} was taken by the ${profile.abductorRelationship || 'other parent'} on ${profile.abductionDate}. Legal custody status at time of taking was: ${profile.custodyStatus}. \n\n${profile.additionalContext || ''}`;
+        const lines = doc.splitTextToSize(summary, 180);
+        doc.text(lines, 10, y);
+        
+        doc.save(`${profile.childName}_Case_Summary.pdf`);
+    };
+
     const clearData = () => {
         if (confirm("Are you sure you want to wipe all local data? This cannot be undone.")) {
             localStorage.clear();
@@ -1482,6 +1669,10 @@ const CaseSettings: React.FC<{ profile: CaseProfile, setProfile: (p: CaseProfile
                     <input type="text" value={editProfile.childName} onChange={e => setEditProfile({...editProfile, childName: e.target.value})} />
                 </div>
                 <div>
+                    <label>Date of Birth (Optional)</label>
+                    <input type="date" value={editProfile.childDOB || ''} onChange={e => setEditProfile({...editProfile, childDOB: e.target.value})} />
+                </div>
+                <div>
                     <label>Date Taken</label>
                     <input type="date" value={editProfile.abductionDate} onChange={e => setEditProfile({...editProfile, abductionDate: e.target.value})} />
                 </div>
@@ -1494,6 +1685,10 @@ const CaseSettings: React.FC<{ profile: CaseProfile, setProfile: (p: CaseProfile
                     <input type="text" value={editProfile.toCountry} onChange={e => setEditProfile({...editProfile, toCountry: e.target.value})} />
                 </div>
                 <button className="button-primary full-width" onClick={saveProfile}>Update Profile Details</button>
+            </div>
+            
+            <div style={{ marginBottom: '2rem' }}>
+                <button className="button-secondary full-width" onClick={handlePrintSummary}>🖨️ Download One-Page Case Sheet (PDF)</button>
             </div>
 
             <h3>Case IDs</h3>
@@ -1696,7 +1891,7 @@ const CampaignSiteBuilder: React.FC<{ profile: CaseProfile }> = ({ profile }) =>
             
             <div style={{ marginTop: '1rem' }}>
                 <label>Missing Person Case Number (if public)</label>
-                <input type="text" value={missingCaseNumber} onChange={e => setMissingCaseNumber(e.target.value)} placeholder="e.g. NCMEC #123456" />
+                <input type="text" value={missingCaseNumber} onChange={e => setMissingCaseNumber(e.target.value)} placeholder="e.g. Police Case #, NGO ID, or NCMEC" />
             </div>
             
             <label style={{ display: 'block', marginTop: '1.5rem', marginBottom: '0.5rem' }}><strong>3. Public Contact Info</strong></label>
@@ -1926,7 +2121,8 @@ const OnboardingWizard: React.FC<{ onComplete: (p: CaseProfile) => void }> = ({ 
                     config: { responseMimeType: "application/json" }
                  });
                  
-                 const analysis = JSON.parse(result.text || "{}");
+                 const text = result.text;
+                 const analysis = text ? JSON.parse(text) : {};
                  
                  const vaultDoc: VaultDocument = {
                     id: Date.now().toString(),
@@ -2232,7 +2428,7 @@ const App: React.FC = () => {
             if (text) {
                 const tasks = JSON.parse(text);
                 const formattedTasks: ActionItem[] = tasks.map((t: any, i: number) => ({
-                    id: Date.now().toString() + i,
+                    id: Date.now() + i.toString(),
                     category: t.category,
                     task: t.task,
                     description: t.description,
@@ -2271,6 +2467,9 @@ const App: React.FC = () => {
                             <div className="day-counter">DAY {caseProfile.abductionDate ? Math.floor((new Date().getTime() - new Date(caseProfile.abductionDate).getTime()) / (1000 * 3600 * 24)) : 0} OF RECOVERY</div>
                             <div className="status-pill active">ACTIVE CASE</div>
                         </div>
+                        
+                        <QuickCopyCard profile={caseProfile} />
+
                         <div className="hero-content-grid">
                              <CriticalTasksWidget items={items} onStart={handleStart} isGenerating={isGeneratingPlan} onBrainstorm={() => setView('taskBrainstormer')} />
                              <IntelligenceBriefWidget profile={caseProfile} onUpdate={handleDossierUpdate} />
