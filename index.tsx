@@ -9,6 +9,7 @@ import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
 
 // --- FIREBASE INITIALIZATION ---
+// Your web app's Firebase configuration
 const firebaseConfig = {
   apiKey: "AIzaSyCLn6ThJrbhnNGO1-YeM_ONqK70-Ega7og",
   authDomain: "recovery-hub-prod.firebaseapp.com",
@@ -18,6 +19,7 @@ const firebaseConfig = {
   appId: "1:663715464779:web:e20168c84c83c42b1bafce",
   measurementId: "G-WBW2YJ2TQH"
 };
+
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
@@ -587,7 +589,7 @@ const MyChecklist: React.FC<{ items: ActionItem[]; setItems: React.Dispatch<Reac
             </div>
             <div className="items-list">
                 {items.map(item => (
-                    <div key={item.id} className={`action-item ${item.completed ? 'completed' : ''}`}>
+                    <div key={item.id} className="action-item ${item.completed ? 'completed' : ''}">
                         <div className="action-item-header">
                             <div style={{ display: 'flex', alignItems: 'center' }}>
                                 <input type="checkbox" className="action-item-checkbox" checked={item.completed} onChange={() => toggleItem(item.id)} />
@@ -1233,7 +1235,9 @@ const CampaignSiteBuilder: React.FC<{ profile: CaseProfile }> = ({ profile }) =>
                     uid = cred.user.uid;
                 } catch (authErr: any) {
                     console.warn("Cloud Auth failed, failing back to Local Storage.", authErr);
-                    // Fallback continues below
+                    if (authErr.code === 'auth/configuration-not-found' || authErr.code === 'auth/unauthorized-domain') {
+                        alert(`Offline Mode: Cloud configuration missing or domain unauthorized. Saving locally. \n\nIf you are the developer, ensure ${window.location.hostname} is added to Firebase Authorized Domains.`);
+                    }
                 }
             }
             
@@ -1645,7 +1649,7 @@ const App: React.FC = () => {
         } catch (error: any) {
             console.error("Sign in error", error);
             if (error.code === 'auth/configuration-not-found' || error.code === 'auth/unauthorized-domain') {
-                alert("Offline Mode: The cloud backend is not configured. You can continue using the app locally. Data will be saved to your device.");
+                alert(`Offline Mode: Cloud configuration missing or domain unauthorized.\n\nIf you are the developer, go to Firebase Console -> Authentication -> Settings -> Authorized Domains and add: ${window.location.hostname}`);
             } else {
                 alert("Sign in failed: " + error.message);
             }
