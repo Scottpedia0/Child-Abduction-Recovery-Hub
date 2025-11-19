@@ -4,7 +4,7 @@ import { createRoot } from 'react-dom/client';
 import { GoogleGenAI, Type, LiveServerMessage, Modality, FunctionDeclaration } from "@google/genai";
 import { initializeApp } from "firebase/app";
 import { getFirestore, collection, getDocs, addDoc, doc, updateDoc, writeBatch, getDoc, deleteDoc, query, where, setDoc, onSnapshot, orderBy } from "firebase/firestore";
-import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, User } from "firebase/auth";
+import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, User, signInAnonymously } from "firebase/auth";
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
 
@@ -44,6 +44,7 @@ interface CaseProfile {
     custodyStatus: CustodyStatus;
     parentRole: ParentRole;
     additionalContext?: string;
+    completedActions?: string[]; // New field for tracking what's already done
     isProfileComplete: boolean;
     isSkipped?: boolean;
     dossierData?: DossierData; 
@@ -991,46 +992,98 @@ const LiveGuide: React.FC = () => {
 
 const CorrespondenceHelper: React.FC<{ profile: CaseProfile }> = ({ profile }) => {
     const [draft, setDraft] = useState('');
+    const [recipient, setRecipient] = useState('');
+    const [topic, setTopic] = useState('');
     const [context, setContext] = useState('');
     const [includeOverview, setIncludeOverview] = useState(true);
     const [tone, setTone] = useState('Firm');
+    const [generating, setGenerating] = useState(false);
 
     const generateDraft = async () => {
-        const prompt = `
-        Draft an email as the PARENT (${profile.parentRole}).
-        Child: ${profile.childName}. Missing from: ${profile.fromCountry} to ${profile.toCountry}.
-        Case IDs: ${JSON.stringify(profile.caseNumbers || {})}.
-        Tone: ${tone}.
-        Context/Goal: ${context}.
-        ${includeOverview ? "Include a brief standard paragraph with child details and abduction date." : "Do NOT include the standard intro."}
-        Inject the Case IDs in the subject line or header.
-        `;
-        const result = await ai.models.generateContent({
-            model: "gemini-2.5-flash",
-            contents: prompt
-        });
-        setDraft(result.text || '');
+        setGenerating(true);
+        try {
+            const prompt = `
+            Draft an email as the PARENT (${profile.parentRole}).
+            
+            To: ${recipient}
+            Regarding: ${topic}
+            Child: ${profile.childName}
+            Missing from: ${profile.fromCountry} to ${profile.toCountry}
+            Abduction Date: ${profile.abductionDate}
+            Case IDs: ${JSON.stringify(profile.caseNumbers || {})}
+            
+            Tone: ${tone}
+            
+            Goal / Additional Context / Past Email to Reply to: 
+            "${context}"
+            
+            Instructions:
+            ${includeOverview ? "- Start with a standard paragraph stating the child's name, abduction date, and location." : "- Do NOT include the standard intro paragraph."}
+            - Ensure the subject line includes Case IDs if available.
+            - Keep it professional, clear, and action-oriented.
+            `;
+            
+            const result = await ai.models.generateContent({
+                model: "gemini-2.5-flash",
+                contents: prompt
+            });
+            setDraft(result.text || '');
+        } catch (e) {
+            console.error(e);
+        } finally {
+            setGenerating(false);
+        }
     };
 
     return (
         <div className="tool-card" style={{ cursor: 'default' }}>
             <h2>Comms HQ</h2>
+            <p>Draft professional emails to lawyers, police, and government agencies.</p>
+            
             <div className="form-grid">
-                <textarea placeholder="Paste email you received or describe goal (e.g. 'Ask FBI for update')" value={context} onChange={e => setContext(e.target.value)} rows={4} className="full-width" />
-                <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-                    <label><input type="checkbox" checked={includeOverview} onChange={e => setIncludeOverview(e.target.checked)} /> Include Case Overview</label>
-                    <select value={tone} onChange={e => setTone(e.target.value)}>
-                        <option>Firm</option>
-                        <option>Pleading</option>
-                        <option>Update</option>
-                    </select>
+                <div style={{ gridColumn: '1 / -1' }}>
+                     <label>To Who? (Recipient)</label>
+                     <input type="text" placeholder="e.g. FBI Agent Smith, State Dept Desk Officer" value={recipient} onChange={e => setRecipient(e.target.value)} />
                 </div>
-                <button className="button-ai full-width" onClick={generateDraft}>Draft Email</button>
+                
+                <div style={{ gridColumn: '1 / -1' }}>
+                     <label>About What? (Topic)</label>
+                     <input type="text" placeholder="e.g. Requesting update on case number, Forwarding new evidence" value={topic} onChange={e => setTopic(e.target.value)} />
+                </div>
+
+                <div style={{ gridColumn: '1 / -1' }}>
+                     <label>Paste Previous Email or Context</label>
+                     <textarea placeholder="Paste the email you received, or describe what you want to say..." value={context} onChange={e => setContext(e.target.value)} rows={4} />
+                </div>
+
+                <div className="full-width" style={{ display: 'flex', flexDirection: 'column', gap: '1rem', padding: '1rem', backgroundColor: '#f8f9fa', borderRadius: '8px' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                        <input type="checkbox" checked={includeOverview} onChange={e => setIncludeOverview(e.target.checked)} /> 
+                        <strong>Include Case Overview?</strong> 
+                        <span style={{ fontSize: '0.8rem', color: '#666' }}>(Auto-adds: "{profile.childName} was taken on...")</span>
+                    </label>
+                    
+                    <div>
+                        <label>Tone</label>
+                        <select value={tone} onChange={e => setTone(e.target.value)}>
+                            <option>Firm & Legal</option>
+                            <option>Pleading & Urgent</option>
+                            <option>Neutral Update</option>
+                            <option>Polite Follow-up</option>
+                        </select>
+                    </div>
+                </div>
+
+                <button className="button-ai full-width" onClick={generateDraft} disabled={generating}>
+                    {generating ? 'Drafting...' : '✨ Generate Email Draft'}
+                </button>
             </div>
+            
             {draft && (
-                <div className="draft-preview">
-                    <textarea value={draft} rows={10} className="full-width" readOnly />
-                    <button className="button-secondary" onClick={() => navigator.clipboard.writeText(draft)}>Copy to Clipboard</button>
+                <div className="draft-preview" style={{ marginTop: '2rem' }}>
+                    <h3>Generated Draft</h3>
+                    <textarea value={draft} rows={15} className="full-width" style={{ fontFamily: 'monospace', padding: '1rem' }} readOnly />
+                    <button className="button-secondary" onClick={() => navigator.clipboard.writeText(draft)} style={{ marginTop: '0.5rem' }}>Copy to Clipboard</button>
                 </div>
             )}
         </div>
@@ -1098,6 +1151,7 @@ const DocumentVault: React.FC = () => {
     return (
         <div className="tool-card" style={{ cursor: 'default' }}>
             <h2>Digital Vault (Secure Local Storage)</h2>
+            <p style={{ fontSize: '0.9rem', color: '#666' }}>Documents are stored securely in your browser. Cloud sync requires Cloud Storage setup.</p>
             <input type="file" onChange={handleUpload} />
             <div style={{ marginTop: '1rem' }}>
                 {files.map(f => (
@@ -1116,16 +1170,17 @@ const CampaignSiteBuilder: React.FC<{ profile: CaseProfile }> = ({ profile }) =>
     const [photo, setPhoto] = useState<string | null>(null);
     const [publishedUrl, setPublishedUrl] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
+    const [drafting, setDrafting] = useState(false);
+    const [showPreview, setShowPreview] = useState(false);
     
     const [email, setEmail] = useState('');
     const [phone, setPhone] = useState('');
 
     useEffect(() => {
-        if (profile.childName) {
-            const defaultStory = `${profile.childName} was taken on ${profile.abductionDate}. Please help us find them.`;
-            if (!story) setStory(defaultStory);
+        if (auth.currentUser?.email && !email) setEmail(auth.currentUser.email);
+        if (!story && profile.childName) {
+            setStory(`${profile.childName} was taken from ${profile.fromCountry} to ${profile.toCountry} on ${profile.abductionDate}. Please help bring them home.`);
         }
-        if (auth.currentUser?.email) setEmail(auth.currentUser.email);
     }, [profile, auth.currentUser]);
 
     const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1140,15 +1195,50 @@ const CampaignSiteBuilder: React.FC<{ profile: CaseProfile }> = ({ profile }) =>
         }
     };
 
-    const publish = async () => {
-        if (!auth.currentUser) {
-            alert("You must be signed in to publish a public website.");
-            return;
+    const handleAutoDraft = async () => {
+        setDrafting(true);
+        try {
+             const prompt = `
+             Write a compelling, emotional, but factual public statement for a missing child website.
+             Child: ${profile.childName}
+             Missing From: ${profile.fromCountry}
+             Taken To: ${profile.toCountry}
+             Date: ${profile.abductionDate}
+             
+             Focus on the human element, the parent's love, and the urgent need for return. 
+             Ask for help clearly. Keep it under 250 words.
+             `;
+             const result = await ai.models.generateContent({
+                 model: "gemini-2.5-flash",
+                 contents: prompt
+             });
+             if (result.text) setStory(result.text);
+        } catch (e) {
+            console.error(e);
+        } finally {
+            setDrafting(false);
         }
+    };
+
+    const publish = async () => {
         setLoading(true);
         try {
-            const id = 'CASE_' + Date.now();
-            await setDoc(doc(db, 'campaigns', id), {
+            let uid = auth.currentUser?.uid;
+            let dbWriteSuccess = false;
+
+            if (!uid) {
+                // If not logged in, try sign in anonymously
+                try {
+                    const cred = await signInAnonymously(auth);
+                    uid = cred.user.uid;
+                } catch (authErr: any) {
+                    console.warn("Cloud Auth failed, failing back to Local Storage.", authErr);
+                    // Fallback continues below
+                }
+            }
+            
+            const id = 'CASE_' + (profile.childName.replace(/\s/g, '_') || 'UNNAMED') + '_' + Date.now();
+            const campaignData = {
                 childName: profile.childName,
                 story: story,
                 photo: photo,
@@ -1156,62 +1246,131 @@ const CampaignSiteBuilder: React.FC<{ profile: CaseProfile }> = ({ profile }) =>
                 toCountry: profile.toCountry,
                 contactEmail: email,
                 contactPhone: phone,
-                createdAt: new Date().toISOString()
-            });
-            setPublishedUrl(`${window.location.origin}?c=${id}`);
+                createdAt: new Date().toISOString(),
+                ownerUid: uid || 'local_user'
+            };
+
+            // Try Firestore write if we have a UID
+            if (uid) {
+                try {
+                    await setDoc(doc(db, 'campaigns', id), campaignData);
+                    dbWriteSuccess = true;
+                } catch (dbErr) {
+                     console.warn("Firestore write failed", dbErr);
+                }
+            }
+
+            // Always save to Local Storage as a fallback or for local preview
+            localStorage.setItem(`LOCAL_CAMPAIGN_${id}`, JSON.stringify(campaignData));
+            
+            const url = `${window.location.origin}?c=${id}`;
+            setPublishedUrl(url);
+            
+            if (!dbWriteSuccess) {
+                alert("Offline Mode: Campaign saved to your device. The link below will work on THIS DEVICE only.");
+            }
+
         } catch (e) {
             console.error(e);
-            alert("Failed to publish. Try again.");
+            alert("Failed to publish. Please try again.");
         } finally {
             setLoading(false);
         }
     };
+    
+    if (showPreview) {
+        const previewData = {
+            childName: profile.childName,
+            story, photo, fromCountry: profile.fromCountry, toCountry: profile.toCountry, contactEmail: email, contactPhone: phone
+        };
+        return (
+            <div className="tool-card">
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1rem' }}>
+                    <h2>Site Preview</h2>
+                    <button className="button-secondary" onClick={() => setShowPreview(false)}>Close Preview</button>
+                </div>
+                <div style={{ border: '1px solid #ccc', borderRadius: '8px', overflow: 'hidden', height: '600px', overflowY: 'scroll' }}>
+                    <PublicCampaignViewer id="PREVIEW" previewData={previewData} />
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="tool-card" style={{ cursor: 'default' }}>
-            <h2>Campaign Website Builder</h2>
-            <p>Create a public page to share your story.</p>
+            <h2>Campaign Website Builder (Hosted)</h2>
+            <p>Create and host a public webpage for your case instantly. Share this link with press and social media.</p>
             
-            <label style={{ display: 'block', marginBottom: '0.5rem' }}>Hero Photo</label>
+            <label style={{ display: 'block', marginBottom: '0.5rem' }}><strong>1. Hero Photo</strong></label>
             <input type="file" accept="image/*" onChange={handleImageUpload} />
             {photo && <img src={photo} style={{ width: '100px', height: '100px', objectFit: 'cover', marginTop: '0.5rem', borderRadius: '8px' }} />}
             
-            <label style={{ display: 'block', marginTop: '1rem', marginBottom: '0.5rem' }}>Public Story</label>
+            <label style={{ display: 'block', marginTop: '1.5rem', marginBottom: '0.5rem' }}><strong>2. Public Story</strong></label>
+            <p style={{ fontSize: '0.8rem', color: '#666' }}>Different from your legal journal. Focus on the child.</p>
             <textarea placeholder="Write your public story here..." value={story} onChange={e => setStory(e.target.value)} rows={6} className="full-width" />
+            <button className="button-ai" onClick={handleAutoDraft} disabled={drafting} style={{ marginTop: '0.5rem' }}>
+                {drafting ? 'Writing...' : '✨ Auto-Draft with AI'}
+            </button>
             
-            <label style={{ display: 'block', marginTop: '1rem', marginBottom: '0.5rem' }}>Public Contact Info</label>
+            <label style={{ display: 'block', marginTop: '1.5rem', marginBottom: '0.5rem' }}><strong>3. Public Contact Info (Call to Action)</strong></label>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                 <input type="email" placeholder="Public Email (e.g. find.charlotte@gmail.com)" value={email} onChange={e => setEmail(e.target.value)} />
                 <input type="tel" placeholder="Public Phone (Optional)" value={phone} onChange={e => setPhone(e.target.value)} />
             </div>
-            <p style={{ fontSize: '0.8rem', color: '#666' }}>Leave blank if you don't want to share.</p>
+            <p style={{ fontSize: '0.8rem', color: '#666' }}>Leave blank if you don't want to share contact info.</p>
 
-            <button className="button-primary" onClick={publish} disabled={loading} style={{ marginTop: '1rem' }}>
-                {loading ? 'Publishing...' : 'Publish to Web'}
-            </button>
+            <div style={{ display: 'flex', gap: '1rem', marginTop: '2rem' }}>
+                <button className="button-secondary" onClick={() => setShowPreview(true)}>Preview Site</button>
+                <button className="button-primary" onClick={publish} disabled={loading}>
+                    {loading ? 'Publishing...' : 'Publish to Web 🚀'}
+                </button>
+            </div>
             
             {publishedUrl && (
-                <div style={{ marginTop: '1rem', padding: '1rem', backgroundColor: '#e8f5e9' }}>
-                    <strong>Live Link:</strong> <a href={publishedUrl} target="_blank">{publishedUrl}</a>
+                <div style={{ marginTop: '1rem', padding: '1rem', backgroundColor: '#e8f5e9', borderRadius: '8px', border: '1px solid #c8e6c9' }}>
+                    <strong>✅ Site is Live!</strong>
+                    <div style={{ marginTop: '0.5rem' }}>
+                        <a href={publishedUrl} target="_blank" style={{ fontSize: '1.1rem', fontWeight: 'bold', color: '#2e7d32' }}>{publishedUrl}</a>
+                    </div>
+                    <p style={{ fontSize: '0.85rem', color: '#666', margin: '0.5rem 0 0 0' }}>Copy this link and share it.</p>
                 </div>
             )}
         </div>
     );
 };
 
-const PublicCampaignViewer: React.FC<{ id: string }> = ({ id }) => {
-    const [data, setData] = useState<any>(null);
-    const [loading, setLoading] = useState(true);
+const PublicCampaignViewer: React.FC<{ id: string, previewData?: any }> = ({ id, previewData }) => {
+    const [data, setData] = useState<any>(previewData || null);
+    const [loading, setLoading] = useState(!previewData);
     const [error, setError] = useState('');
 
     useEffect(() => {
+        if (previewData) {
+            setData(previewData);
+            setLoading(false);
+            return;
+        }
+        
         const fetchData = async () => {
             try {
-                const snap = await getDoc(doc(db, 'campaigns', id));
-                if (snap.exists()) {
-                    setData(snap.data());
+                // Try Firestore First
+                try {
+                    const snap = await getDoc(doc(db, 'campaigns', id));
+                    if (snap.exists()) {
+                        setData(snap.data());
+                        setLoading(false);
+                        return;
+                    }
+                } catch (err) {
+                    console.warn("Firestore read failed, checking local storage", err);
+                }
+
+                // Fallback to Local Storage
+                const local = localStorage.getItem(`LOCAL_CAMPAIGN_${id}`);
+                if (local) {
+                    setData(JSON.parse(local));
                 } else {
-                    setError("Campaign not found.");
+                    setError("Campaign not found. (Check internet connection if this is a remote link)");
                 }
             } catch (e) {
                 console.error(e);
@@ -1221,10 +1380,11 @@ const PublicCampaignViewer: React.FC<{ id: string }> = ({ id }) => {
             }
         };
         fetchData();
-    }, [id]);
+    }, [id, previewData]);
 
     if (loading) return <div style={{ padding: '2rem', textAlign: 'center' }}>Loading Campaign...</div>;
     if (error) return <div style={{ padding: '2rem', textAlign: 'center', color: 'red' }}>{error}</div>;
+    if (!data) return null;
 
     return (
         <div className="public-campaign-container">
@@ -1236,7 +1396,7 @@ const PublicCampaignViewer: React.FC<{ id: string }> = ({ id }) => {
                     {data.photo ? (
                          <img src={data.photo} alt="Missing Child" style={{ width: '100%', borderRadius: '16px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} />
                     ) : (
-                         <div style={{ width: '100%', height: '300px', backgroundColor: '#eee', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>No Photo Available</div>
+                         <div style={{ width: '100%', height: '300px', backgroundColor: '#eee', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '16px' }}>No Photo Available</div>
                     )}
                     <div>
                         <h1 style={{ fontSize: '2.5rem', margin: '0 0 1rem 0', lineHeight: 1.1 }}>Bring {data.childName} Home</h1>
@@ -1288,9 +1448,42 @@ const DataManagement: React.FC = () => {
 
 const OnboardingWizard: React.FC<{ onComplete: (p: CaseProfile) => void }> = ({ onComplete }) => {
     const [step, setStep] = useState(0);
-    const [data, setData] = useState<Partial<CaseProfile>>({});
+    const [data, setData] = useState<Partial<CaseProfile>>({ completedActions: [] });
 
     const next = () => setStep(s => s + 1);
+
+    const handleActionToggle = (action: string) => {
+        const current = data.completedActions || [];
+        if (current.includes(action)) {
+            setData({ ...data, completedActions: current.filter(a => a !== action) });
+        } else {
+            setData({ ...data, completedActions: [...current, action] });
+        }
+    };
+    
+    const handleDocUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files?.[0]) {
+            const file = e.target.files[0];
+            try {
+                const doc: VaultDocument = {
+                    id: Date.now().toString(),
+                    name: file.name,
+                    type: 'Initial Evidence',
+                    date: new Date().toISOString(),
+                    summary: 'Uploaded during case setup',
+                    extractedText: '',
+                    fileType: file.type,
+                    size: file.size,
+                    uploadedAt: new Date().toISOString()
+                };
+                await saveFileToVault(doc, file);
+                alert(`"${file.name}" saved to Digital Vault (Local).`);
+            } catch (err) {
+                console.error(err);
+                alert("Failed to save document.");
+            }
+        }
+    };
 
     return (
         <div className="tool-card">
@@ -1364,15 +1557,39 @@ const OnboardingWizard: React.FC<{ onComplete: (p: CaseProfile) => void }> = ({ 
                     </div>
                 </div>
             )}
-             {step === 2 && (
+            {step === 2 && (
                 <div className="form-grid">
                     <div className="full-width">
-                        <label>Additional Context (Optional)</label>
-                        <p style={{fontSize: '0.9rem', color: '#666'}}>Tell us anything else that might affect the legal strategy (e.g., "Child has a medical condition," "Abductor has dual citizenship," "There is a history of domestic violence," "There are pending criminal charges").</p>
+                        <label style={{marginBottom: '0.5rem'}}>Progress Check: What have you already done?</label>
+                        <div style={{display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '1.5rem'}}>
+                            {[
+                                'Filed Police Report',
+                                'Contacted Child Abduction Lawyer', 
+                                'Contacted State Dept / Ministry of Foreign Affairs',
+                                'Alerted Border Control / Passport Agency'
+                            ].map(action => (
+                                <label key={action} style={{fontWeight: 'normal', display: 'flex', alignItems: 'center'}}>
+                                    <input 
+                                        type="checkbox" 
+                                        checked={data.completedActions?.includes(action)} 
+                                        onChange={() => handleActionToggle(action)} 
+                                        style={{width: 'auto', marginRight: '0.5rem'}}
+                                    />
+                                    {action}
+                                </label>
+                            ))}
+                        </div>
+
+                        <label>Upload Key Documents (Optional)</label>
+                        <p style={{fontSize: '0.9rem', color: '#666'}}>Court orders or police reports will be saved to your secure Digital Vault.</p>
+                        <input type="file" onChange={handleDocUpload} style={{ marginBottom: '1.5rem' }} />
+                    
+                        <label>Is there anything else?</label>
+                        <p style={{fontSize: '0.9rem', color: '#666'}}>Context affects strategy (e.g., "Child has medical needs," "History of domestic violence," "Abductor has dual citizenship").</p>
                         <textarea 
                             value={data.additionalContext || ''} 
                             onChange={e => setData({...data, additionalContext: e.target.value})} 
-                            rows={6} 
+                            rows={4} 
                             placeholder="Enter details here..."
                         />
                     </div>
@@ -1422,6 +1639,19 @@ const App: React.FC = () => {
         if (items.length > 0) localStorage.setItem('recoveryHubItems', JSON.stringify(items));
     }, [items]);
 
+    const handleSignIn = async () => {
+        try {
+            await signInWithPopup(auth, new GoogleAuthProvider());
+        } catch (error: any) {
+            console.error("Sign in error", error);
+            if (error.code === 'auth/configuration-not-found' || error.code === 'auth/unauthorized-domain') {
+                alert("Offline Mode: The cloud backend is not configured. You can continue using the app locally. Data will be saved to your device.");
+            } else {
+                alert("Sign in failed: " + error.message);
+            }
+        }
+    };
+
     const handleAddTask = (newTask: ActionItem) => {
         setItems(prev => [newTask, ...prev]);
         setView('myChecklist');
@@ -1445,10 +1675,16 @@ const App: React.FC = () => {
             - Custody Status: ${caseProfile.custodyStatus}
             - Abductor: ${caseProfile.abductorRelationship}
             - Additional Context: ${caseProfile.additionalContext || 'None provided'}
-            
+            - ALREADY COMPLETED ACTIONS: ${caseProfile.completedActions?.join(', ') || 'None'}
+
             Generate 12-15 distinct, actionable tasks.
+            
+            CRITICAL INSTRUCTION ON COMPLETED ITEMS:
+            If an action is listed in "ALREADY COMPLETED ACTIONS" (e.g., "Filed Police Report"), DO NOT generate a task to do it again.
+            Instead, generate the *follow-up* task (e.g., "Obtain Police Report Number" or "Ensure Police entered child into NCIC").
+            
             Prioritize them strictly:
-            - "Immediate": Critical first 24-48 hour actions (Police, Border Agencies).
+            - "Immediate": Critical first 24-48 hour actions (Police, Border Agencies) - IF NOT ALREADY DONE.
             - "High": First week legal actions (Hague application, Lawyer retention).
             - "Medium": Evidence gathering and logistical support.
             - "Low": Long-term administrative tasks.
@@ -1572,7 +1808,7 @@ const App: React.FC = () => {
                     <a onClick={() => setView('caseSettings')}>Settings</a>
                 </nav>
                 <div className="auth-widget">
-                    {user ? <div className="user-pill"><img src={user.photoURL || ''} /> {user.displayName}</div> : <button className="button-secondary small-auth-btn" onClick={() => signInWithPopup(auth, new GoogleAuthProvider())}>Sign In / Save Case</button>}
+                    {user ? <div className="user-pill"><img src={user.photoURL || ''} /> {user.displayName}</div> : <button className="button-secondary small-auth-btn" onClick={handleSignIn}>Sign In / Save Case</button>}
                 </div>
             </header>
 
