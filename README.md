@@ -11,10 +11,7 @@
 
 To take this app from code to a live website, follow these steps:
 
-### 1. Get Your API Keys
-*   **Gemini API Key:** Go to [Google AI Studio](https://aistudio.google.com/app/apikey) and click **Create API Key**. Copy this string.
-
-### 2. Firebase Setup (Backend)
+### 1. Firebase Setup (Backend)
 1.  Go to the [Firebase Console](https://console.firebase.google.com).
 2.  Create/Open project `recovery-hub-prod` (or create a new one).
 3.  **Authentication:** Go to Build > Authentication. Click "Get Started".
@@ -38,18 +35,16 @@ To take this app from code to a live website, follow these steps:
     ```
 5.  **Connect Code:**
     *   Go to Project Overview (Gear Icon) > Project Settings.
-    *   Scroll to "Your apps" > Click the Web icon (</>).
+    *   Scroll to "Your apps" > Click the Web icon (</>). 
     *   Copy the `firebaseConfig` object (apiKey, authDomain, etc.).
     *   **IMPORTANT:** Open `index.tsx` in your code and replace the existing `const firebaseConfig = { ... }` with your new one.
 6.  **Domains:** Go to Authentication > Settings > Authorized Domains. Add your production domain (e.g., `recovery-hub.vercel.app`).
 
-### 3. Vercel Setup (Hosting)
+### 2. Vercel Setup (Hosting)
 1.  Push this code to a GitHub repository.
 2.  Go to [Vercel](https://vercel.com) and "Add New Project".
 3.  Import your GitHub repo.
-4.  **Environment Variables:** Add the following variable in Vercel settings:
-    *   `VITE_GEMINI_API_KEY`: [Paste your Gemini API Key here]
-5.  Click **Deploy**.
+4.  Click **Deploy**.
 
 ---
 
@@ -66,13 +61,7 @@ To take this app from code to a live website, follow these steps:
     npm install
     ```
 
-3.  **Environment Setup**
-    Create a `.env` file in the root directory:
-    ```env
-    VITE_GEMINI_API_KEY=your_google_gemini_api_key_here
-    ```
-
-4.  **Run the development server**
+3.  **Run the development server**
     ```bash
     npm run dev
     ```
@@ -84,7 +73,7 @@ To take this app from code to a live website, follow these steps:
 ### 🛡️ Crisis Management
 *   **Intelligence Dossier:** AI analyzes the specific country pair to determine Hague compliance.
 *   **Universal Task List:** Auto-generates a priority checklist based on legal status.
-*   **Live Strategy Guide:** Real-time, voice-activated AI companion using Gemini Live API.
+*   **Live Strategy Guide:** Real-time, voice-activated AI companion.
 *   **Strategy Brainstormer:** Chat interface to turn concerns into tasks.
 
 ### 📂 Evidence & Logistics
@@ -101,7 +90,6 @@ To take this app from code to a live website, follow these steps:
 ## 🛠️ Tech Stack
 
 *   **Frontend:** React 19, TypeScript, Vite
-*   **AI:** Google Gemini API
 *   **Storage:** Firebase Firestore (Cloud) + IndexedDB (Local)
 
 ## 📄 License
