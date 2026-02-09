@@ -1,39 +1,40 @@
 
 
+
 :root {
     /* MD3 Color System Base */
     --md-sys-color-primary: #005ac1;
     --md-sys-color-on-primary: #ffffff;
     --md-sys-color-primary-container: #d8e2ff;
     --md-sys-color-on-primary-container: #001a41;
-    
+
     --md-sys-color-secondary: #575e71;
     --md-sys-color-on-secondary: #ffffff;
     --md-sys-color-secondary-container: #dbe2f9;
     --md-sys-color-on-secondary-container: #141b2c;
-    
+
     --md-sys-color-tertiary: #715573;
     --md-sys-color-on-tertiary: #ffffff;
     --md-sys-color-tertiary-container: #fbd7fc;
     --md-sys-color-on-tertiary-container: #29132d;
-    
+
     --md-sys-color-error: #ba1a1a;
     --md-sys-color-on-error: #ffffff;
     --md-sys-color-error-container: #ffdad6;
     --md-sys-color-on-error-container: #410002;
-    
-    --md-sys-color-background: #fdfbff;
+
+    --md-sys-color-background: #f8f9fa;
     --md-sys-color-on-background: #1a1b1e;
-    --md-sys-color-surface: #fdfbff;
+    --md-sys-color-surface: #ffffff;
     --md-sys-color-on-surface: #1a1b1e;
     --md-sys-color-surface-variant: #e1e2ec;
     --md-sys-color-on-surface-variant: #44474f;
     --md-sys-color-outline: #74777f;
-    
+
     /* Custom Crisis Colors */
     --crisis-red: #b3261e;
     --crisis-red-container: #f9dedc;
-    
+
     /* Elevation & Shape */
     --md-sys-elevation-1: 0px 1px 3px 1px rgba(0, 0, 0, 0.15), 0px 1px 2px 0px rgba(0, 0, 0, 0.3);
     --md-sys-elevation-2: 0px 2px 6px 2px rgba(0, 0, 0, 0.15), 0px 1px 2px 0px rgba(0, 0, 0, 0.3);
@@ -41,6 +42,11 @@
     --md-sys-shape-corner-medium: 12px;
     --md-sys-shape-corner-small: 8px;
     --md-sys-shape-corner-extra-large: 28px;
+
+    /* Enhanced Shadow System (from Variant 4) */
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.04);
+    --shadow-md: 0 4px 6px rgba(0,0,0,0.06);
+    --shadow-lg: 0 10px 15px rgba(0,0,0,0.08);
 
     --font-family: 'Nunito Sans', sans-serif;
 }
@@ -205,9 +211,9 @@ main {
 }
 
 .header-branding h1 {
-    font-size: 1.5rem;
+    font-size: 1.6rem;
     font-weight: 700;
-    color: var(--md-sys-color-on-surface);
+    color: var(--md-sys-color-primary);
     margin: 0;
     line-height: 1.2;
 }
@@ -240,11 +246,12 @@ main {
     padding: 0.5rem 0.75rem;
     border-radius: var(--md-sys-shape-corner-small);
     transition: background-color 0.2s;
+    cursor: pointer;
 }
 
 .header-nav a:hover {
     background-color: var(--md-sys-color-surface-variant);
-    color: var(--md-sys-color-on-surface);
+    color: var(--md-sys-color-primary);
 }
 
 /* Auth Widget */
@@ -531,6 +538,8 @@ main {
 .story-link-card:hover {
     background-color: rgba(255,255,255,1);
     border-color: var(--md-sys-color-primary);
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-sm);
 }
 .story-title {
     color: var(--md-sys-color-on-surface);
@@ -571,7 +580,7 @@ main {
 
 .tool-card {
     background-color: var(--md-sys-color-surface);
-    border: 1px solid var(--md-sys-color-surface-variant);
+    border: 1px solid rgba(0,0,0,0.06);
     border-radius: var(--md-sys-shape-corner-large);
     padding: 1.5rem;
     cursor: pointer;
@@ -580,6 +589,7 @@ main {
     flex-direction: column;
     height: 100%;
     box-sizing: border-box;
+    box-shadow: var(--shadow-sm);
 }
 
 .tool-card.highlight {
@@ -589,8 +599,8 @@ main {
 
 .tool-card:hover {
     border-color: var(--md-sys-color-primary);
-    transform: translateY(-3px);
-    box-shadow: var(--md-sys-elevation-1);
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-lg);
 }
 
 .tool-card h3 {
@@ -632,8 +642,9 @@ main {
     box-shadow: var(--md-sys-elevation-1);
 }
 .button-primary:hover {
-    background-color: #004a9f; /* slightly darker */
-    box-shadow: var(--md-sys-elevation-2);
+    background-color: #004a9f;
+    box-shadow: var(--shadow-md);
+    transform: translateY(-2px);
 }
 .button-primary:disabled {
     background-color: var(--md-sys-color-surface-variant);
@@ -650,6 +661,8 @@ main {
 .button-secondary:hover {
     background-color: var(--md-sys-color-primary-container);
     border-color: var(--md-sys-color-primary);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-sm);
 }
 
 .button-danger {
@@ -663,12 +676,31 @@ main {
     font-size: 0.9rem;
     padding: 0.5rem 1rem;
 }
+.button-ai:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(103, 80, 164, 0.4);
+}
 
 .button-download {
     background-color: var(--md-sys-color-tertiary);
     color: var(--md-sys-color-on-tertiary);
     font-size: 0.9rem;
     width: auto;
+}
+.button-download:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-sm);
+}
+
+.button-danger:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-sm);
+}
+
+/* Active (pressed) state for all buttons */
+.button-primary:active, .button-secondary:active, .button-danger:active, .button-ai:active, .button-download:active {
+    transform: translateY(0);
+    box-shadow: none;
 }
 
 
@@ -681,7 +713,7 @@ main {
 }
 @media (min-width: 768px) { .form-grid { grid-template-columns: 1fr 1fr; } }
 
-input[type="text"], input[type="url"], input[type="email"], select, textarea, input[type="date"], input[type="time"], input[type="number"] {
+input[type="text"], input[type="url"], input[type="email"], input[type="tel"], select, textarea, input[type="date"], input[type="time"], input[type="number"] {
     width: 100%;
     padding: 1rem;
     border: 1px solid var(--md-sys-color-outline);
@@ -694,8 +726,9 @@ input[type="text"], input[type="url"], input[type="email"], select, textarea, in
 }
 
 input:focus, select:focus, textarea:focus {
-    outline: 2px solid var(--md-sys-color-primary);
-    border-color: transparent;
+    outline: none;
+    border-color: var(--md-sys-color-primary);
+    box-shadow: 0 0 0 3px var(--md-sys-color-primary-container);
 }
 
 .full-width { grid-column: 1 / -1; }
@@ -770,17 +803,29 @@ input:focus, select:focus, textarea:focus {
 /* --- Action Items --- */
 .action-item {
     background-color: var(--md-sys-color-surface);
-    border: 1px solid var(--md-sys-color-surface-variant);
+    border: 1px solid rgba(0,0,0,0.06);
     border-radius: var(--md-sys-shape-corner-medium);
     padding: 1rem 1.25rem;
     margin-bottom: 0.75rem;
-    transition: background-color 0.2s;
+    transition: background-color 0.2s, transform 0.2s, box-shadow 0.2s, border-color 0.2s;
+    box-shadow: var(--shadow-sm);
+}
+
+.action-item:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-sm);
+    border-color: var(--md-sys-color-outline);
 }
 
 .action-item.completed {
     background-color: var(--md-sys-color-surface-variant);
     border-color: transparent;
     opacity: 0.7;
+}
+
+.action-item.completed .action-item-task-text {
+    text-decoration: line-through;
+    color: var(--md-sys-color-on-surface-variant);
 }
 
 .action-item-header {
@@ -795,6 +840,7 @@ input:focus, select:focus, textarea:focus {
     height: 1.2rem;
     margin-right: 0.75rem;
     accent-color: var(--md-sys-color-primary);
+    cursor: pointer;
 }
 
 .action-item-priority {
@@ -808,6 +854,24 @@ input:focus, select:focus, textarea:focus {
 .action-item-priority.high { background-color: #ff8f00; color: black; }
 .action-item-priority.medium { background-color: #fbc02d; color: black; }
 .action-item-priority.low { background-color: #4caf50; color: white; }
+
+/* Delete button for tasks */
+.action-item-delete {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 1rem;
+    color: var(--md-sys-color-on-surface-variant);
+    opacity: 0.4;
+    transition: opacity 0.2s, color 0.2s;
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+.action-item-delete:hover {
+    opacity: 1;
+    color: var(--md-sys-color-error);
+    background-color: var(--md-sys-color-error-container);
+}
 
 
 /* --- Live Audio Visualizer --- */
@@ -983,6 +1047,133 @@ input:focus, select:focus, textarea:focus {
     background-color: #fff;
 }
 
+/* --- Template Selector for Comms HQ --- */
+.template-selector {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.template-chip {
+    padding: 0.4rem 0.8rem;
+    border: 1px solid var(--md-sys-color-outline);
+    border-radius: 100px;
+    font-size: 0.85rem;
+    cursor: pointer;
+    background: var(--md-sys-color-surface);
+    color: var(--md-sys-color-on-surface-variant);
+    transition: all 0.2s;
+}
+
+.template-chip:hover {
+    background-color: var(--md-sys-color-primary-container);
+    border-color: var(--md-sys-color-primary);
+}
+
+.template-chip.active {
+    background-color: var(--md-sys-color-primary);
+    color: var(--md-sys-color-on-primary);
+    border-color: var(--md-sys-color-primary);
+}
+
+
+/* --- Contact List Builder --- */
+.contact-card {
+    background-color: var(--md-sys-color-surface);
+    border: 1px solid var(--md-sys-color-surface-variant);
+    border-radius: var(--md-sys-shape-corner-medium);
+    padding: 1rem;
+    margin-bottom: 0.75rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1rem;
+}
+
+.contact-card-info {
+    flex: 1;
+}
+
+.contact-card-name {
+    font-weight: 700;
+    font-size: 1rem;
+    margin-bottom: 0.15rem;
+}
+
+.contact-card-role {
+    font-size: 0.8rem;
+    color: var(--md-sys-color-on-surface-variant);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 0.5rem;
+}
+
+.contact-card-details {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.contact-card-details button {
+    background: none;
+    border: 1px solid var(--md-sys-color-surface-variant);
+    border-radius: 6px;
+    padding: 0.2rem 0.6rem;
+    font-size: 0.8rem;
+    cursor: pointer;
+    color: var(--md-sys-color-primary);
+    transition: all 0.2s;
+}
+
+.contact-card-details button:hover {
+    background-color: var(--md-sys-color-primary-container);
+    border-color: var(--md-sys-color-primary);
+}
+
+.contact-card-actions {
+    display: flex;
+    gap: 0.25rem;
+}
+
+.contact-card-actions button {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 1.1rem;
+    padding: 2px;
+    opacity: 0.5;
+    transition: opacity 0.2s;
+}
+
+.contact-card-actions button:hover {
+    opacity: 1;
+}
+
+
+/* --- Error Boundary --- */
+.error-boundary {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 60vh;
+    text-align: center;
+    padding: 2rem;
+}
+
+.error-boundary h2 {
+    color: var(--md-sys-color-error);
+    margin-bottom: 0.5rem;
+}
+
+.error-boundary p {
+    color: var(--md-sys-color-on-surface-variant);
+    max-width: 500px;
+    margin-bottom: 1.5rem;
+}
+
+
 /* --- Footer --- */
 .app-footer {
     margin-top: auto;
@@ -1012,6 +1203,7 @@ input:focus, select:focus, textarea:focus {
     margin-bottom: 0.5rem;
     color: inherit;
     text-decoration: none;
+    cursor: pointer;
 }
 .footer-links a:hover { text-decoration: underline; }
 
@@ -1022,4 +1214,241 @@ input:focus, select:focus, textarea:focus {
     border-radius: var(--md-sys-shape-corner-medium);
     font-size: 0.85rem;
     margin-top: 2rem;
+}
+
+
+/* --- Prevention / Checklist Response --- */
+.response-content {
+    margin-top: 2rem;
+    background-color: var(--md-sys-color-surface);
+    padding: 1.5rem;
+    border-radius: var(--md-sys-shape-corner-medium);
+    border: 1px solid var(--md-sys-color-surface-variant);
+}
+
+.response-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+.response-header h3 {
+    margin: 0;
+}
+
+.gemini-response-checklist .checklist-heading {
+    margin-top: 1.5rem;
+    margin-bottom: 0.75rem;
+    color: var(--md-sys-color-primary);
+    padding-bottom: 0.25rem;
+    border-bottom: 1px solid var(--md-sys-color-surface-variant);
+    font-size: 1.05rem;
+}
+.gemini-response-checklist .checklist-heading:first-child {
+    margin-top: 0;
+}
+
+.gemini-response-checklist .checklist-item {
+    padding: 0.5rem 0;
+    transition: opacity 0.2s;
+}
+.gemini-response-checklist .checklist-item.completed {
+    opacity: 0.6;
+}
+.gemini-response-checklist .checklist-item.completed span {
+    text-decoration: line-through;
+    color: var(--md-sys-color-on-surface-variant);
+}
+
+.gemini-response-checklist .checklist-item-label {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    font-size: 0.95rem;
+    line-height: 1.5;
+    cursor: pointer;
+}
+.gemini-response-checklist .checklist-item-checkbox {
+    width: 1.25rem;
+    height: 1.25rem;
+    flex-shrink: 0;
+    margin-top: 0.15rem;
+    accent-color: var(--md-sys-color-primary);
+    cursor: pointer;
+}
+
+.gemini-response-checklist .checklist-paragraph {
+    font-size: 0.9rem;
+    line-height: 1.6;
+    color: #555;
+    margin: 0.5rem 0;
+}
+
+.prevention-spinner {
+    border: 4px solid var(--md-sys-color-surface-variant);
+    border-top: 4px solid var(--md-sys-color-primary);
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    animation: preventionSpin 1s linear infinite;
+    margin: 2rem auto;
+}
+
+@keyframes preventionSpin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+
+/* --- Welcome Disclaimer Popup --- */
+.welcome-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(4px);
+    padding: 1rem;
+}
+
+.welcome-modal {
+    background: #fff;
+    border-radius: var(--md-sys-shape-corner-extra-large);
+    max-width: 600px;
+    width: 100%;
+    max-height: 85vh;
+    overflow-y: auto;
+    padding: 2.5rem;
+    box-shadow: var(--shadow-lg);
+    animation: welcomeFadeIn 0.3s ease-out;
+}
+
+@keyframes welcomeFadeIn {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.welcome-modal h2 {
+    font-size: 1.4rem;
+    margin-bottom: 0.75rem;
+    color: var(--md-sys-color-on-surface);
+}
+
+.welcome-modal > p {
+    font-size: 0.95rem;
+    line-height: 1.6;
+    color: #444;
+}
+
+.welcome-section {
+    margin-top: 1.25rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--md-sys-color-outline-variant);
+}
+
+.welcome-section h3 {
+    font-size: 1rem;
+    font-weight: 700;
+    margin-bottom: 0.4rem;
+    color: var(--md-sys-color-on-surface);
+}
+
+.welcome-section p {
+    font-size: 0.9rem;
+    line-height: 1.6;
+    color: #555;
+    margin-bottom: 0.5rem;
+}
+
+.welcome-section ul {
+    list-style: none;
+    padding: 0;
+    margin: 0.5rem 0 0 0;
+}
+
+.welcome-section ul li {
+    font-size: 0.9rem;
+    line-height: 1.5;
+    color: #555;
+    padding: 0.3rem 0 0.3rem 1.2rem;
+    position: relative;
+}
+
+.welcome-section ul li::before {
+    content: "â†’";
+    position: absolute;
+    left: 0;
+    color: var(--md-sys-color-primary);
+    font-weight: 700;
+}
+
+/* --- Print Styles (Enhanced from Variant 4) --- */
+@media print {
+    body {
+        background-color: #ffffff;
+        color: #000000;
+        font-size: 12pt;
+    }
+
+    .app-header, .app-footer, .button-secondary, .button-ai, .button-download,
+    .form-grid, .home-nav, .disclaimer-block, .auth-widget, .header-nav,
+    .template-selector, .contact-card-actions, .action-item-delete, .prevention-spinner {
+        display: none !important;
+    }
+
+    main {
+        width: 100%;
+        padding: 0;
+        margin: 0;
+    }
+
+    .app-container {
+        max-width: 100%;
+        padding: 0;
+        box-shadow: none;
+        border: none;
+    }
+
+    .tool-card, .action-item, .journal-entry, .contact-card {
+        border: none !important;
+        box-shadow: none !important;
+        padding: 0.5rem 0 !important;
+        margin-bottom: 0.75rem;
+        break-inside: avoid;
+    }
+
+    .action-item-checkbox, .checklist-item-checkbox {
+       -webkit-appearance: checkbox;
+       -moz-appearance: checkbox;
+       appearance: checkbox;
+    }
+
+    .response-content {
+        border: none !important;
+        box-shadow: none !important;
+        padding: 0 !important;
+        margin-top: 0 !important;
+    }
+
+    a {
+        text-decoration: none;
+        color: inherit;
+    }
+
+    a[href]::after {
+        content: " (" attr(href) ")";
+        font-size: 0.9em;
+        color: #555;
+    }
+
+    /* Don't show URL for internal navigation links */
+    a[href^="#"]::after, .story-link-card::after {
+        content: "";
+    }
+
+    @page {
+        margin: 0.75in;
+    }
 }
