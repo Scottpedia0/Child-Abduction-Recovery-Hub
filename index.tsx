@@ -1752,8 +1752,6 @@ const CaseJournal: React.FC = () => {
 const KnowledgeBaseBuilder: React.FC = () => {
     const [search, setSearch] = useState('');
     const [selectedEntry, setSelectedEntry] = useState<KnowledgeBaseEntry | null>(null);
-    const [entries, setEntries] = useState<KnowledgeBaseEntry[]>([]);
-
     // Seed Data — Comprehensive Global Knowledge Base
     const seedData: KnowledgeBaseEntry[] = [
         // --- LEGAL TEXTS & TREATIES ---
@@ -4224,75 +4222,114 @@ COMMON PITFALLS:
     }
     ];
 
-    useEffect(() => {
-        // Try to fetch from Cloud Firestore first (Restoring "Lost" Knowledge)
-        const fetchEntries = async () => {
-            try {
-                const q = query(collection(db, 'knowledgeBaseEntries'));
-                const snap = await getDocs(q);
-                if (!snap.empty) {
-                    const cloudEntries = snap.docs.map(d => ({ id: d.id, ...d.data() } as KnowledgeBaseEntry));
-                    setEntries([...seedData, ...cloudEntries]); // Combine seed + cloud
-                } else {
-                    setEntries(seedData);
-                }
-            } catch (e) {
-                console.warn("Offline or no KB permissions", e);
-                setEntries(seedData);
-            }
-        };
-        fetchEntries();
-    }, []);
+    const [activeTab, setActiveTab] = useState('all');
 
-    const filtered = entries.filter(e => e.name.toLowerCase().includes(search.toLowerCase()) || e.tags?.some(t => t.toLowerCase().includes(search.toLowerCase())));
+    // Categories derived from entryType
+    const categories: { key: string; label: string; types: string[] }[] = [
+        { key: 'all', label: `All (${seedData.length})`, types: [] },
+        { key: 'templates', label: 'Email & Letter Templates', types: ['template'] },
+        { key: 'procedures', label: 'Step-by-Step Guides', types: ['procedure'] },
+        { key: 'countries', label: 'Country Strategies', types: ['country_matrix'] },
+        { key: 'legal', label: 'Legal Resources', types: ['resource'] },
+        { key: 'guidance', label: 'Strategy & Guidance', types: ['guidance'] },
+        { key: 'prevention', label: 'Prevention', types: ['prevention', 'opsec'] },
+    ];
 
-    const seedCloud = async () => {
-        if (!auth.currentUser) { alert("Please sign in to save templates to the cloud."); return; }
-        try {
-            const batch = writeBatch(db);
-            seedData.forEach(e => {
-                const ref = doc(collection(db, 'knowledgeBaseEntries'));
-                batch.set(ref, e);
-            });
-            await batch.commit();
-            alert("Knowledge Base Seeded to Cloud!");
-        } catch (e) { console.error(e); }
-    };
+    const filtered = seedData.filter(e => {
+        const matchesSearch = !search || e.name.toLowerCase().includes(search.toLowerCase()) || e.tags?.some(t => t.toLowerCase().includes(search.toLowerCase())) || e.countryPair?.toLowerCase().includes(search.toLowerCase());
+        const matchesTab = activeTab === 'all' || categories.find(c => c.key === activeTab)?.types.includes(e.entryType);
+        return matchesSearch && matchesTab;
+    });
+
+    const tabCounts: Record<string, number> = {};
+    categories.forEach(c => {
+        tabCounts[c.key] = c.key === 'all' ? seedData.length : seedData.filter(e => c.types.includes(e.entryType)).length;
+    });
 
     return (
-        <div className="tool-card" style={{ cursor: 'default' }}>
-            <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
-                <h2>Community Knowledge Base</h2>
-                <button className="button-secondary" style={{fontSize:'0.7rem'}} onClick={seedCloud}>Restore Default Templates</button>
+        <div style={{ cursor: 'default' }}>
+            <div style={{ marginBottom: '1.5rem' }}>
+                <h2 style={{ marginBottom: '0.25rem' }}>Guides & Templates Library</h2>
+                <p style={{ margin: 0 }}>{seedData.length} resources — legal templates, country strategies, step-by-step procedures, and more.</p>
             </div>
-            <p>A curated library of legal texts, government guides, and operational security templates. Click to view full content.</p>
-            <input type="text" placeholder="Search resources, guides, legal texts..." value={search} onChange={e => setSearch(e.target.value)} style={{ marginBottom: '1rem' }} />
+
+            <input type="text" placeholder="Search by name, tag, or country..." value={search} onChange={e => setSearch(e.target.value)} style={{ marginBottom: '1rem', width: '100%' }} />
+
+            {/* Category Tabs */}
+            <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', marginBottom: '1.25rem' }}>
+                {categories.filter(c => tabCounts[c.key] > 0).map(c => (
+                    <button key={c.key} onClick={() => setActiveTab(c.key)} style={{
+                        padding: '0.35rem 0.75rem', fontSize: '0.78rem', fontWeight: activeTab === c.key ? 600 : 400,
+                        borderRadius: '100px', cursor: 'pointer', border: '1px solid ' + (activeTab === c.key ? 'var(--accent)' : 'var(--border-default)'),
+                        background: activeTab === c.key ? 'var(--accent-muted)' : 'var(--surface-card)',
+                        color: activeTab === c.key ? 'var(--accent)' : 'var(--text-secondary)',
+                    }}>
+                        {c.label} {c.key !== 'all' && <span style={{ opacity: 0.6 }}>({tabCounts[c.key]})</span>}
+                    </button>
+                ))}
+            </div>
+
+            {/* Results count */}
+            {search && <p style={{ fontSize: '0.8rem', color: 'var(--text-tertiary)', marginBottom: '0.75rem' }}>{filtered.length} result{filtered.length !== 1 ? 's' : ''} for "{search}"</p>}
+
+            {/* Entry Grid */}
             <div className="tools-grid">
                 {filtered.map(entry => (
-                    <div key={entry.id} className="dossier-card" style={{ minHeight: '180px', cursor: 'pointer' }} onClick={() => setSelectedEntry(entry)}>
-                        <div className="section-header">{entry.resourceType}</div>
-                        <h4 style={{ margin: '0.5rem 0' }}>{entry.name}</h4>
-                        <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{entry.summary}</p>
-                        <div style={{ display: 'flex', gap: '0.5rem', marginTop: 'auto', flexWrap: 'wrap' }}>
-                            {entry.tags?.map(t => <span key={t} className="journal-badge" style={{ fontSize: '0.65rem' }}>{t}</span>)}
+                    <div key={entry.id} className="tool-card" style={{ cursor: 'pointer' }} onClick={() => setSelectedEntry(entry)}>
+                        <div style={{ fontSize: '0.65rem', fontWeight: 650, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-tertiary)', marginBottom: '0.3rem' }}>
+                            {entry.resourceType} {entry.countryPair && entry.countryPair !== 'Global' && entry.countryPair !== 'General' ? `· ${entry.countryPair}` : ''}
+                        </div>
+                        <h4 style={{ margin: '0 0 0.35rem 0', fontSize: '0.88rem', fontWeight: 600, lineHeight: 1.3 }}>{entry.name}</h4>
+                        <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', lineHeight: 1.45, marginBottom: '0.5rem', flex: 1 }}>{entry.summary?.substring(0, 140)}{(entry.summary?.length || 0) > 140 ? '...' : ''}</p>
+                        {(entry.phone || entry.email) && (
+                            <div style={{ fontSize: '0.7rem', color: 'var(--accent)', marginBottom: '0.35rem' }}>
+                                {entry.phone && <span>{entry.phone}</span>}
+                                {entry.phone && entry.email && <span> · </span>}
+                                {entry.email && <span>{entry.email}</span>}
+                            </div>
+                        )}
+                        <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
+                            {entry.tags?.slice(0, 4).map(t => <span key={t} className="journal-badge" style={{ fontSize: '0.6rem' }}>{t}</span>)}
+                            {(entry.tags?.length || 0) > 4 && <span style={{ fontSize: '0.6rem', color: 'var(--text-hint)' }}>+{(entry.tags?.length || 0) - 4}</span>}
                         </div>
                     </div>
                 ))}
             </div>
 
+            {filtered.length === 0 && <p style={{ textAlign: 'center', color: 'var(--text-tertiary)', padding: '2rem 0' }}>No results found. Try a different search or category.</p>}
+
+            {/* Detail Modal */}
             {selectedEntry && (
                 <div className="tour-backdrop" onClick={() => setSelectedEntry(null)}>
-                    <div className="tour-card" onClick={e => e.stopPropagation()} style={{ maxWidth: '800px', maxHeight: '80vh', overflowY: 'auto' }}>
+                    <div className="tour-card" onClick={e => e.stopPropagation()} style={{ maxWidth: '800px', maxHeight: '85vh', overflowY: 'auto' }}>
                         <div className="tour-header">
-                            <h3>{selectedEntry.name}</h3>
+                            <div>
+                                <div style={{ fontSize: '0.65rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-tertiary)', marginBottom: '0.25rem' }}>
+                                    {selectedEntry.resourceType} {selectedEntry.countryPair && selectedEntry.countryPair !== 'Global' && selectedEntry.countryPair !== 'General' ? `· ${selectedEntry.countryPair}` : ''}
+                                </div>
+                                <h3 style={{ margin: 0 }}>{selectedEntry.name}</h3>
+                            </div>
                             <button className="tour-close" onClick={() => setSelectedEntry(null)}>×</button>
                         </div>
-                        <div style={{ whiteSpace: 'pre-wrap', fontFamily: 'monospace', backgroundColor: 'var(--surface-raised)', padding: '1rem', borderRadius: '8px', marginBottom: '1rem' }}>
-                            {selectedEntry.fullText || "Content preview not available in offline mode."}
+                        {selectedEntry.summary && <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>{selectedEntry.summary}</p>}
+                        {(selectedEntry.phone || selectedEntry.email || selectedEntry.url) && (
+                            <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', padding: '0.6rem 0.75rem', background: 'var(--surface-raised)', borderRadius: '8px', marginBottom: '1rem', fontSize: '0.8rem' }}>
+                                {selectedEntry.phone && <span>📞 {selectedEntry.phone}</span>}
+                                {selectedEntry.email && <span>📧 {selectedEntry.email}</span>}
+                                {selectedEntry.url && <a href={selectedEntry.url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)' }}>🔗 Official Link →</a>}
+                            </div>
+                        )}
+                        <div style={{ whiteSpace: 'pre-wrap', fontFamily: "'SF Mono', Consolas, monospace", fontSize: '0.82rem', backgroundColor: 'var(--surface-raised)', padding: '1.25rem', borderRadius: '8px', marginBottom: '1rem', lineHeight: 1.55, border: '1px solid var(--border-subtle)' }}>
+                            {selectedEntry.fullText || "Content preview not available."}
                         </div>
-                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem' }}>
-                            <button className="button-secondary" onClick={() => navigator.clipboard.writeText(selectedEntry.fullText || '')}>Copy to Clipboard</button>
-                            <button className="button-primary" onClick={() => setSelectedEntry(null)}>Close</button>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
+                                {selectedEntry.tags?.map(t => <span key={t} className="journal-badge" style={{ fontSize: '0.6rem' }}>{t}</span>)}
+                            </div>
+                            <div style={{ display: 'flex', gap: '0.75rem' }}>
+                                <button className="button-secondary" onClick={() => { navigator.clipboard.writeText(selectedEntry.fullText || ''); alert('Copied to clipboard!'); }}>Copy Template</button>
+                                <button className="button-primary" onClick={() => setSelectedEntry(null)}>Close</button>
+                            </div>
                         </div>
                     </div>
                 </div>
