@@ -23,7 +23,7 @@ const db = getFirestore(app);
 const auth = getAuth(app);
 
 // --- TYPES ---
-type View = 'onboarding' | 'dashboard' | 'liveConversation' | 'knowledgeBase' | 'termsOfService' | 'dataManagement' | 'myChecklist' | 'caseJournal' | 'expenses' | 'correspondence' | 'caseSettings' | 'documentVault' | 'campaignBuilder' | 'taskBrainstormer' | 'contactList' | 'prevention';
+type View = 'onboarding' | 'dashboard' | 'liveConversation' | 'knowledgeBase' | 'termsOfService' | 'dataManagement' | 'myChecklist' | 'caseJournal' | 'expenses' | 'correspondence' | 'caseSettings' | 'documentVault' | 'campaignBuilder' | 'taskBrainstormer' | 'contactList' | 'prevention' | 'howItWorks' | 'supportResources';
 type CustodyStatus = 'no-order' | 'sole-custody-me-local' | 'joint-custody-local' | 'sole-custody-them-local' | 'sole-custody-me-foreign' | 'joint-custody-foreign' | 'sole-custody-them-foreign' | 'other';
 type ParentRole = 'mother' | 'father' | 'legal-guardian' | 'other';
 
@@ -32,6 +32,7 @@ interface DossierData {
     risk: 'High' | 'Medium' | 'Low';
     legalSystem: string;
     redFlags: string[];
+    suggestedTasks: { task: string; priority: string }[];
     dateGenerated: string;
 }
 
@@ -368,7 +369,7 @@ const TaskAssistantModal: React.FC<{ task: ActionItem, onClose: () => void }> = 
                     {messages.map((m, i) => (
                         <div key={i} style={{ marginBottom: '1rem', display: 'flex', justifyContent: m.role === 'user' ? 'flex-end' : 'flex-start' }}>
                             <div style={{ 
-                                backgroundColor: m.role === 'user' ? '#005ac1' : 'white', 
+                                backgroundColor: m.role === 'user' ? '#1e3a5f' : 'white', 
                                 color: m.role === 'user' ? 'white' : 'black',
                                 padding: '0.8rem', 
                                 borderRadius: '12px',
@@ -421,7 +422,7 @@ const QuickCopyCard: React.FC<{ profile: CaseProfile }> = ({ profile }) => {
                 Taken: <strong>{profile.abductionDate}</strong> 📋
             </button>
             {Object.entries(profile.caseNumbers || {}).map(([key, val]) => (
-                 <button key={key} className="button-secondary" style={{ fontSize: '0.8rem', padding: '0.25rem 0.75rem', backgroundColor: 'white', border: '1px solid #005ac1', color: '#005ac1' }} onClick={() => copyToClipboard(val, key)}>
+                 <button key={key} className="button-secondary" style={{ fontSize: '0.8rem', padding: '0.25rem 0.75rem', backgroundColor: 'white', border: '1px solid #1e3a5f', color: '#1e3a5f' }} onClick={() => copyToClipboard(val, key)}>
                     {key}: <strong>{val}</strong> 📋
                 </button>
             ))}
@@ -429,7 +430,7 @@ const QuickCopyCard: React.FC<{ profile: CaseProfile }> = ({ profile }) => {
     );
 };
 
-const IntelligenceBriefWidget: React.FC<{ profile: CaseProfile, onUpdate: (d: DossierData) => void }> = ({ profile, onUpdate }) => {
+const IntelligenceBriefWidget: React.FC<{ profile: CaseProfile, onUpdate: (d: DossierData) => void, onAddTask?: (task: string, priority: string) => void }> = ({ profile, onUpdate, onAddTask }) => {
     const [loading, setLoading] = useState(false);
     const [viewIndex, setViewIndex] = useState(0);
     
@@ -446,20 +447,34 @@ const IntelligenceBriefWidget: React.FC<{ profile: CaseProfile, onUpdate: (d: Do
                 recentContext = logs.slice(0, 5).map(l => `- ${l.date}: ${l.description}`).join('\n');
             }
 
+            const savedItems = localStorage.getItem('actionItems');
+            let existingTasks = '';
+            if (savedItems) {
+                const parsed: ActionItem[] = JSON.parse(savedItems);
+                existingTasks = parsed.filter(t => !t.completed).map(t => `- ${t.task}`).join('\n');
+            }
+
             const prompt = `
             Analyze the CURRENT status of this child abduction case from ${profile.fromCountry} to ${profile.toCountry}.
             Date Taken: ${profile.abductionDate}.
-            
+            Custody status: ${profile.custodyStatus}.
+            Additional context: ${profile.additionalContext || 'None provided'}
+
             RECENT ACTIVITY (Use this to update the assessment):
             ${recentContext}
-            
+
+            EXISTING TASKS (do NOT suggest these — suggest NEW ones):
+            ${existingTasks || 'No tasks yet.'}
+
             Provide an updated assessment. NOT just static legal info, but a reactive summary.
+            Also suggest 2-3 NEW specific, actionable tasks they should add to their plan that they haven't already. Make them concrete and immediately doable.
             Return JSON:
             {
                 "risk": "High" | "Medium" | "Low",
                 "summary": "Reactive summary based on recent logs and general country status.",
                 "legalSystem": "Updates on challenges in ${profile.toCountry}.",
-                "redFlags": ["List current urgent red flags based on recent activity"]
+                "redFlags": ["List current urgent red flags based on recent activity"],
+                "suggestedTasks": [{"task": "Specific actionable task", "priority": "Immediate" | "High" | "Medium"}]
             }
             `;
 
@@ -474,9 +489,10 @@ const IntelligenceBriefWidget: React.FC<{ profile: CaseProfile, onUpdate: (d: Do
                             risk: { type: Type.STRING },
                             summary: { type: Type.STRING },
                             legalSystem: { type: Type.STRING },
-                            redFlags: { type: Type.ARRAY, items: { type: Type.STRING } }
+                            redFlags: { type: Type.ARRAY, items: { type: Type.STRING } },
+                            suggestedTasks: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { task: { type: Type.STRING }, priority: { type: Type.STRING } }, required: ["task", "priority"] } }
                         },
-                        required: ["risk", "summary", "legalSystem", "redFlags"]
+                        required: ["risk", "summary", "legalSystem", "redFlags", "suggestedTasks"]
                     }
                 }
             });
@@ -534,6 +550,20 @@ const IntelligenceBriefWidget: React.FC<{ profile: CaseProfile, onUpdate: (d: Do
                     </ul>
                 </div>
             )}
+            {onAddTask && currentView?.suggestedTasks && currentView.suggestedTasks.length > 0 && (
+                <div style={{ marginTop: '0.75rem', borderTop: '1px solid rgba(0,0,0,0.08)', paddingTop: '0.75rem' }}>
+                    <div style={{ fontSize: '0.8rem', fontWeight: 700, marginBottom: '0.4rem' }}>💡 Suggested Next Steps</div>
+                    {currentView.suggestedTasks.map((s: any, i: number) => (
+                        <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.4rem 0', borderBottom: i < currentView.suggestedTasks.length - 1 ? '1px solid rgba(0,0,0,0.04)' : 'none' }}>
+                            <div style={{ fontSize: '0.85rem', flex: 1 }}>
+                                <span className={`mini-priority ${s.priority.toLowerCase()}`} style={{ marginRight: '0.5rem' }}>{s.priority}</span>
+                                {s.task}
+                            </div>
+                            <button onClick={() => onAddTask(s.task, s.priority)} style={{ background: 'none', border: '1px solid var(--md-sys-color-primary)', color: 'var(--md-sys-color-primary)', borderRadius: '6px', padding: '2px 8px', fontSize: '0.75rem', cursor: 'pointer', whiteSpace: 'nowrap', marginLeft: '0.5rem' }}>+ Add</button>
+                        </div>
+                    ))}
+                </div>
+            )}
             <div style={{ marginTop: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ fontSize: '0.7rem', color: '#666' }}>Generated: {currentView?.dateGenerated}</span>
                 <button className="button-secondary" onClick={refreshAnalysis} style={{ fontSize: '0.7rem', padding: '2px 8px' }}>
@@ -544,7 +574,7 @@ const IntelligenceBriefWidget: React.FC<{ profile: CaseProfile, onUpdate: (d: Do
     );
 };
 
-const CriticalTasksWidget: React.FC<{ items: ActionItem[], onStart: () => void, isGenerating: boolean, onBrainstorm: () => void }> = ({ items, onStart, isGenerating, onBrainstorm }) => {
+const CriticalTasksWidget: React.FC<{ items: ActionItem[], onStart: () => void, isGenerating: boolean, onBrainstorm: () => void, onViewTasks?: () => void }> = ({ items, onStart, isGenerating, onBrainstorm, onViewTasks }) => {
     const incomplete = items.filter(i => !i.completed);
     const topTasks = incomplete.filter(i => i.priority === 'Immediate' || i.priority === 'High').slice(0, 3);
     const nextTasks = incomplete.filter(i => i.priority !== 'Immediate' && i.priority !== 'High').slice(0, 3);
@@ -553,9 +583,16 @@ const CriticalTasksWidget: React.FC<{ items: ActionItem[], onStart: () => void, 
         return (
             <div className="critical-tasks-empty">
                 <h4>⚠️ Action Plan Not Started</h4>
-                <p>Initialize your step-by-step recovery plan now.</p>
-                <button className="button-primary" onClick={onStart} disabled={isGenerating}>
-                    {isGenerating ? 'Generating Plan...' : 'Generate Plan'}
+                <p>Hit the button below to generate a checklist customized to your case. In the meantime, here are the universal first steps every parent should take:</p>
+                <div style={{ textAlign: 'left', fontSize: '0.9rem', margin: '0.75rem 0', lineHeight: '1.8' }}>
+                    <div>1. <strong>File a police report</strong> — in your home country, today</div>
+                    <div>2. <strong>Contact an international family law attorney</strong> — in BOTH countries</div>
+                    <div>3. <strong>Call your Central Authority</strong> — (US: 1-888-407-4747 State Dept)</div>
+                    <div>4. <strong>Secure your child's passport</strong> — request it flagged or cancelled</div>
+                    <div>5. <strong>Document everything</strong> — save texts, emails, screenshots, all of it</div>
+                </div>
+                <button className="button-primary" onClick={onStart} disabled={isGenerating} style={{ width: '100%' }}>
+                    {isGenerating ? 'Generating Your Plan...' : 'Generate My Full Action Plan'}
                 </button>
             </div>
         );
@@ -573,22 +610,141 @@ const CriticalTasksWidget: React.FC<{ items: ActionItem[], onStart: () => void, 
 
     const tasksToShow = topTasks.length > 0 ? topTasks : nextTasks;
     const title = topTasks.length > 0 ? "Top Priorities" : "Next Priorities";
+    const completedCount = items.filter(i => i.completed).length;
+    const recentlyCompleted = items.filter(i => i.completed).length; // total completed acts as lifetime momentum
 
     return (
         <div className="critical-tasks-list">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
                 <div style={{ fontSize: '0.8rem', textTransform: 'uppercase', color: '#666' }}>{title}</div>
-                {topTasks.length === 0 && <div style={{ fontSize: '0.7rem', color: '#4caf50', fontWeight: 'bold' }}>High Priority Cleared ✅</div>}
+                <div style={{ fontSize: '0.7rem', color: 'var(--md-sys-color-on-surface-variant)', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                    <span style={{ fontWeight: 700, color: 'var(--md-sys-color-primary)' }}>{completedCount}</span> done · <span style={{ fontWeight: 700 }}>{incomplete.length}</span> to go
+                </div>
             </div>
+            {topTasks.length === 0 && <div style={{ fontSize: '0.7rem', color: '#4caf50', fontWeight: 'bold', marginBottom: '0.5rem' }}>High Priority Cleared ✅</div>}
             {tasksToShow.map(task => (
-                <div key={task.id} className="mini-task-card">
+                <div key={task.id} className="mini-task-card" onClick={onViewTasks} style={{ cursor: 'pointer' }}>
                     <span className={`mini-priority ${task.priority.toLowerCase()}`}>{task.priority}</span>
                     <span className="mini-task-text">{task.task}</span>
                 </div>
             ))}
+            {onViewTasks && <button onClick={onViewTasks} style={{ background: 'none', border: 'none', color: 'var(--md-sys-color-primary)', fontSize: '0.8rem', cursor: 'pointer', padding: '0.4rem 0', width: '100%', textAlign: 'center' }}>View all tasks →</button>}
             {topTasks.length === 0 && nextTasks.length === 0 && (
                 <button className="button-secondary full-width" onClick={onBrainstorm} style={{marginTop: '0.5rem', fontSize: '0.85rem'}}>+ Add More Tasks</button>
             )}
+        </div>
+    );
+};
+
+// --- MOMENTUM TRACKER ---
+const MomentumTracker: React.FC<{ items: ActionItem[] }> = ({ items }) => {
+    const [activityData, setActivityData] = useState<{ date: string; count: number }[]>([]);
+    const [stats, setStats] = useState({ tasksCompleted: 0, logsAdded: 0, expensesLogged: 0, docsUploaded: 0, streak: 0 });
+
+    useEffect(() => {
+        const loadActivity = async () => {
+            const timestamps: string[] = [];
+            let logsCount = 0, expensesCount = 0, docsCount = 0;
+
+            // Logs
+            try {
+                const logs: LogEntry[] = JSON.parse(localStorage.getItem('caseLogs') || '[]');
+                logs.forEach(l => { if (l.createdAt) timestamps.push(l.createdAt); });
+                logsCount = logs.length;
+            } catch {}
+
+            // Expenses
+            try {
+                const expenses: ExpenseEntry[] = JSON.parse(localStorage.getItem('caseExpenses') || '[]');
+                expenses.forEach(e => { if (e.date) timestamps.push(new Date(e.date).toISOString()); });
+                expensesCount = expenses.length;
+            } catch {}
+
+            // Vault docs (IndexedDB)
+            try {
+                const docs = await getFilesFromLocalVault();
+                docs.forEach(d => { if (d.uploadedAt) timestamps.push(d.uploadedAt); });
+                docsCount = docs.length;
+            } catch {}
+
+            // Completed tasks (current + archived from localStorage)
+            let archived: ActionItem[] = [];
+            try { archived = JSON.parse(localStorage.getItem('recoveryHubArchived') || '[]'); } catch {}
+            const tasksCompleted = items.filter(i => i.completed).length + archived.length;
+
+            // Build 30-day heatmap
+            const now = new Date();
+            const days: { date: string; count: number }[] = [];
+            const dayMap: Record<string, number> = {};
+
+            for (let i = 29; i >= 0; i--) {
+                const d = new Date(now);
+                d.setDate(d.getDate() - i);
+                const key = d.toISOString().split('T')[0];
+                dayMap[key] = 0;
+                days.push({ date: key, count: 0 });
+            }
+
+            timestamps.forEach(ts => {
+                try {
+                    const key = new Date(ts).toISOString().split('T')[0];
+                    if (dayMap[key] !== undefined) dayMap[key]++;
+                } catch {}
+            });
+
+            days.forEach(d => { d.count = dayMap[d.date]; });
+            setActivityData(days);
+
+            // Calculate streak
+            let streak = 0;
+            for (let i = days.length - 1; i >= 0; i--) {
+                if (days[i].count > 0) streak++;
+                else break;
+            }
+
+            setStats({ tasksCompleted, logsAdded: logsCount, expensesLogged: expensesCount, docsUploaded: docsCount, streak });
+        };
+        loadActivity();
+    }, [items]);
+
+    const totalActions = stats.tasksCompleted + stats.logsAdded + stats.expensesLogged + stats.docsUploaded;
+    if (totalActions === 0) return null; // Don't show if no activity yet
+
+    const maxCount = Math.max(...activityData.map(d => d.count), 1);
+    const getColor = (count: number) => {
+        if (count === 0) return '#e2e8f0';
+        const intensity = Math.min(count / maxCount, 1);
+        if (intensity <= 0.33) return '#93c5fd';
+        if (intensity <= 0.66) return '#3b82f6';
+        return '#1e3a5f';
+    };
+
+    const weekDay = (dateStr: string) => {
+        const d = new Date(dateStr + 'T12:00:00');
+        return d.toLocaleDateString('en', { weekday: 'short' }).charAt(0);
+    };
+
+    return (
+        <div className="momentum-tracker">
+            <div className="momentum-header">
+                <div className="momentum-title">
+                    {stats.streak > 0 ? `🔥 ${stats.streak}-day streak` : '📊 Your Activity'}
+                </div>
+                <div className="momentum-subtitle">Last 30 days</div>
+            </div>
+            <div className="momentum-heatmap">
+                {activityData.map((d, i) => (
+                    <div key={d.date} className="heatmap-cell" title={`${d.date}: ${d.count} action${d.count !== 1 ? 's' : ''}`} style={{ backgroundColor: getColor(d.count) }}>
+                        {i % 7 === 0 && <span className="heatmap-day-label">{weekDay(d.date)}</span>}
+                    </div>
+                ))}
+            </div>
+            <div className="momentum-stats">
+                {stats.tasksCompleted > 0 && <div className="momentum-stat"><span className="stat-number">{stats.tasksCompleted}</span><span className="stat-label">tasks done</span></div>}
+                {stats.logsAdded > 0 && <div className="momentum-stat"><span className="stat-number">{stats.logsAdded}</span><span className="stat-label">evidence logged</span></div>}
+                {stats.expensesLogged > 0 && <div className="momentum-stat"><span className="stat-number">{stats.expensesLogged}</span><span className="stat-label">expenses tracked</span></div>}
+                {stats.docsUploaded > 0 && <div className="momentum-stat"><span className="stat-number">{stats.docsUploaded}</span><span className="stat-label">docs uploaded</span></div>}
+            </div>
         </div>
     );
 };
@@ -652,32 +808,80 @@ const SimilarCasesWidget: React.FC<{ from: string, to: string }> = ({ from, to }
     );
 };
 
-const TaskBrainstormer: React.FC<{ profile: CaseProfile, onAddTask: (task: ActionItem) => void }> = ({ profile, onAddTask }) => {
-    // ... (unchanged)
+const TaskBrainstormer: React.FC<{ profile: CaseProfile, onAddTask: (task: ActionItem) => void, items: ActionItem[] }> = ({ profile, onAddTask, items }) => {
     const [input, setInput] = useState('');
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [loading, setLoading] = useState(false);
+    const [vaultDocs, setVaultDocs] = useState<VaultDocument[]>([]);
+    const [selectedDocId, setSelectedDocId] = useState<string>('');
+
+    useEffect(() => {
+        getFilesFromLocalVault().then(docs => setVaultDocs(docs));
+    }, []);
 
     const handleSend = async () => {
         if (!input.trim()) return;
-        const userMsg: ChatMessage = { role: 'user', text: input };
+
+        let docContext = '';
+        if (selectedDocId) {
+            const chosenDoc = vaultDocs.find(d => d.id === selectedDocId);
+            if (chosenDoc) {
+                docContext = `\n\nThe parent is referencing this specific document:\nDocument: "${chosenDoc.name}" (${chosenDoc.type})\nDate: ${chosenDoc.date}\nSummary: ${chosenDoc.summary}\nExtracted Text: ${chosenDoc.extractedText?.substring(0, 3000) || 'No text extracted'}`;
+            }
+        }
+
+        const userMsg: ChatMessage = { role: 'user', text: input + (selectedDocId ? ` [📎 Attached: ${vaultDocs.find(d => d.id === selectedDocId)?.name}]` : '') };
         setMessages(prev => [...prev, userMsg]);
         setInput('');
+        setSelectedDocId('');
         setLoading(true);
 
         try {
+            // Gather intelligence context
+            const ragContext = await getRagContext();
+            const savedLogs = localStorage.getItem('caseLogs');
+            let recentLogs = '';
+            if (savedLogs) {
+                const parsed: LogEntry[] = JSON.parse(savedLogs);
+                recentLogs = parsed.slice(0, 5).map(l => `- ${l.date}: ${l.type} — ${l.description}`).join('\n');
+            }
+            const existingTasks = items.filter(t => !t.completed).map(t => `- [${t.priority}] ${t.task}`).join('\n');
+            const dossier = profile.dossierData;
+            const intelSummary = dossier ? `Risk: ${dossier.risk}. ${dossier.summary}. Red flags: ${dossier.redFlags?.join(', ')}` : '';
+
             const prompt = `
-            You are a strategic advisor for a parent whose child has been abducted from ${profile.fromCountry} to ${profile.toCountry}.
-            The parent has a concern: "${userMsg.text}".
-            
-            1. Validate their concern briefly.
-            2. Suggest 1-2 concrete, actionable tasks they can do to address this specific concern.
-            
+            You are a direct, tactical strategic advisor helping ${profile.childName ? profile.childName + "'s parent" : "a parent"} recover their child who was taken from ${profile.fromCountry} to ${profile.toCountry}.
+            ${profile.childName ? `The child's name is ${profile.childName}.` : ''}
+            Custody status: ${profile.custodyStatus}.
+            Date taken: ${profile.abductionDate}.
+            Additional context: ${profile.additionalContext || 'None'}
+
+            INTELLIGENCE BRIEF: ${intelSummary || 'No analysis run yet.'}
+
+            RECENT ACTIVITY:
+            ${recentLogs || 'No recent logs.'}
+
+            CURRENT TASKS (already on their plan — do NOT suggest these):
+            ${existingTasks || 'No tasks yet.'}
+
+            REFERENCE DOCUMENTS:
+            ${ragContext || 'No documents uploaded.'}
+
+            ${docContext}
+
+            The parent says: "${input}"
+
+            INSTRUCTIONS:
+            1. Use ${profile.childName || "the child"}'s name when relevant. Be personal — this is their kid.
+            2. Validate their concern in 1-2 sentences, then be TACTICAL.
+            3. Suggest exactly 3 concrete, NEW tasks (not already on their plan). Make them specific and immediately doable.
+            4. End with 1-2 probing follow-up questions to uncover more they should be thinking about. Things like "Have you checked if..." or "Do you know whether..." — questions that lead to more action.
+
             Return JSON:
             {
-                "reply": "Your conversational reply here...",
+                "reply": "Your conversational reply here... End with your follow-up questions.",
                 "suggestedTasks": [
-                    { "category": "Legal/Prevention/Logistics", "task": "Title of task", "description": "Short description", "priority": "High/Medium" }
+                    { "category": "Legal/Prevention/Logistics", "task": "Title of task", "description": "Short description", "priority": "High/Medium/Immediate" }
                 ]
             }
             `;
@@ -769,13 +973,21 @@ const TaskBrainstormer: React.FC<{ profile: CaseProfile, onAddTask: (task: Actio
                 {loading && <div style={{ fontStyle: 'italic', color: '#666' }}>Thinking...</div>}
             </div>
 
+            {vaultDocs.length > 0 && (
+                <div style={{ marginBottom: '0.5rem' }}>
+                    <select value={selectedDocId} onChange={e => setSelectedDocId(e.target.value)} style={{ width: '100%', padding: '0.4rem', fontSize: '0.85rem', borderRadius: '6px', border: '1px solid #ddd' }}>
+                        <option value="">📎 Attach a document (optional)</option>
+                        {vaultDocs.map(d => <option key={d.id} value={d.id}>{d.name} — {d.type} ({d.date})</option>)}
+                    </select>
+                </div>
+            )}
             <div style={{ display: 'flex', gap: '0.5rem' }}>
-                <input 
-                    type="text" 
-                    value={input} 
-                    onChange={e => setInput(e.target.value)} 
+                <input
+                    type="text"
+                    value={input}
+                    onChange={e => setInput(e.target.value)}
                     onKeyDown={e => e.key === 'Enter' && handleSend()}
-                    placeholder="Type your concern here..." 
+                    placeholder="Type your concern here..."
                 />
                 <button className="button-primary" onClick={handleSend}>Send</button>
             </div>
@@ -785,9 +997,36 @@ const TaskBrainstormer: React.FC<{ profile: CaseProfile, onAddTask: (task: Actio
 
 const MyChecklist: React.FC<{ items: ActionItem[]; setItems: React.Dispatch<React.SetStateAction<ActionItem[]>>; onOpenBrainstorm: () => void }> = ({ items, setItems, onOpenBrainstorm }) => {
     const [assistingTask, setAssistingTask] = useState<ActionItem | null>(null);
+    const [searchTerm, setSearchTerm] = useState('');
+    const [filterPriority, setFilterPriority] = useState<string>('all');
+    const [showArchived, setShowArchived] = useState(false);
+    const [archivedItems, setArchivedItems] = useState<ActionItem[]>(() => {
+        const saved = localStorage.getItem('recoveryHubArchived');
+        return saved ? JSON.parse(saved) : [];
+    });
+
+    useEffect(() => {
+        localStorage.setItem('recoveryHubArchived', JSON.stringify(archivedItems));
+    }, [archivedItems]);
 
     const toggleItem = (id: string) => {
         setItems(prev => prev.map(i => i.id === id ? { ...i, completed: !i.completed } : i));
+    };
+
+    const archiveItem = (id: string) => {
+        const item = items.find(i => i.id === id);
+        if (item) {
+            setArchivedItems(prev => [item, ...prev]);
+            setItems(prev => prev.filter(i => i.id !== id));
+        }
+    };
+
+    const restoreItem = (id: string) => {
+        const item = archivedItems.find(i => i.id === id);
+        if (item) {
+            setItems(prev => [item, ...prev]);
+            setArchivedItems(prev => prev.filter(i => i.id !== id));
+        }
     };
 
     const deleteItem = (id: string) => {
@@ -796,11 +1035,17 @@ const MyChecklist: React.FC<{ items: ActionItem[]; setItems: React.Dispatch<Reac
         }
     };
 
+    const filteredItems = items.filter(item => {
+        const matchesSearch = !searchTerm || item.task.toLowerCase().includes(searchTerm.toLowerCase()) || item.description?.toLowerCase().includes(searchTerm.toLowerCase());
+        const matchesPriority = filterPriority === 'all' || item.priority === filterPriority;
+        return matchesSearch && matchesPriority;
+    });
+
     const exportTasksPDF = () => {
         const doc = new jsPDF();
         
         // Professional Header
-        doc.setFillColor(0, 90, 193); // Primary Blue
+        doc.setFillColor(30, 58, 95); // Primary Blue
         doc.rect(0, 0, 210, 20, 'F');
         
         doc.setFontSize(18);
@@ -823,9 +1068,10 @@ const MyChecklist: React.FC<{ items: ActionItem[]; setItems: React.Dispatch<Reac
         let y = 40;
         
         const categories = ['Immediate', 'High', 'Medium', 'Low'];
-        
+        const allItems = [...items, ...archivedItems]; // Include archived in PDF
+
         categories.forEach(prio => {
-            const tasks = items.filter(i => i.priority === prio);
+            const tasks = allItems.filter(i => i.priority === prio);
             if (tasks.length > 0) {
                 // Section Header
                 doc.setFontSize(12);
@@ -869,41 +1115,77 @@ const MyChecklist: React.FC<{ items: ActionItem[]; setItems: React.Dispatch<Reac
 
     return (
         <div className="tool-card" style={{ cursor: 'default' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <h2>Universal Action Plan</h2>
-                <div style={{display: 'flex', gap: '0.5rem'}}>
-                    <button className="button-secondary" onClick={exportTasksPDF}>🖨️ Export PDF</button>
-                    <button className="button-secondary" onClick={onOpenBrainstorm}>💡 Brainstorm</button>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+                <h2>Action Plan</h2>
+                <div style={{display: 'flex', gap: '0.5rem', flexWrap: 'wrap'}}>
+                    <button className="button-secondary" onClick={exportTasksPDF} style={{ fontSize: '0.8rem' }}>🖨️ PDF</button>
+                    <button className="button-secondary" onClick={onOpenBrainstorm} style={{ fontSize: '0.8rem' }}>💡 Brainstorm</button>
+                    <button className="button-secondary" onClick={() => setShowArchived(!showArchived)} style={{ fontSize: '0.8rem' }}>
+                        {showArchived ? '← Back to Active' : `📦 Archive (${archivedItems.length})`}
+                    </button>
                 </div>
             </div>
-            <div className="items-list">
-                {items.map(item => (
-                    <div key={item.id} className={`action-item ${item.completed ? 'completed' : ''}`}>
-                        <div className="action-item-header">
-                            <div style={{ display: 'flex', alignItems: 'center' }}>
-                                <input type="checkbox" className="action-item-checkbox" checked={item.completed} onChange={() => toggleItem(item.id)} />
-                                <strong className="action-item-task-text">{item.task}</strong>
-                            </div>
-                            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                                <button className="button-ai" style={{ fontSize: '0.7rem', padding: '2px 8px' }} onClick={() => setAssistingTask(item)}>
-                                    🤖 AI Guide
-                                </button>
-                                <span className={`action-item-priority ${item.priority.toLowerCase()}`}>{item.priority}</span>
-                                <button className="action-item-delete" onClick={() => deleteItem(item.id)} title="Delete Task">🗑️</button>
+
+            {!showArchived && (
+                <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem', marginBottom: '1rem' }}>
+                    <input type="text" placeholder="Search tasks..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} style={{ flex: 1, padding: '0.5rem 0.75rem', fontSize: '0.9rem' }} />
+                    <select value={filterPriority} onChange={e => setFilterPriority(e.target.value)} style={{ padding: '0.5rem', fontSize: '0.85rem' }}>
+                        <option value="all">All Priorities</option>
+                        <option value="Immediate">Immediate</option>
+                        <option value="High">High</option>
+                        <option value="Medium">Medium</option>
+                        <option value="Low">Low</option>
+                    </select>
+                </div>
+            )}
+
+            {showArchived ? (
+                <div className="items-list" style={{ marginTop: '1rem' }}>
+                    <p style={{ fontSize: '0.85rem', color: '#666', marginBottom: '1rem' }}>Archived tasks are still included in PDF exports. Click restore to move back to active.</p>
+                    {archivedItems.map(item => (
+                        <div key={item.id} className="action-item completed">
+                            <div className="action-item-header">
+                                <strong className="action-item-task-text" style={{ textDecoration: 'line-through' }}>{item.task}</strong>
+                                <button className="button-secondary" style={{ fontSize: '0.75rem', padding: '2px 8px' }} onClick={() => restoreItem(item.id)}>Restore</button>
                             </div>
                         </div>
-                        <p style={{ margin: '0.5rem 0 0 2rem', fontSize: '0.9rem' }}>{item.description}</p>
-                        {item.subtasks && item.subtasks.length > 0 && (
-                            <div style={{ marginLeft: '2rem', marginTop: '0.5rem' }}>
-                                {item.subtasks.map(sub => (
-                                    <div key={sub.id} style={{ fontSize: '0.85rem', color: '#555' }}>- {sub.text}</div>
-                                ))}
+                    ))}
+                    {archivedItems.length === 0 && <p style={{ color: '#666', textAlign: 'center' }}>No archived tasks yet. Complete a task and archive it to keep your list clean.</p>}
+                </div>
+            ) : (
+                <div className="items-list">
+                    {filteredItems.map(item => (
+                        <div key={item.id} className={`action-item ${item.completed ? 'completed' : ''}`}>
+                            <div className="action-item-header">
+                                <div style={{ display: 'flex', alignItems: 'center' }}>
+                                    <input type="checkbox" className="action-item-checkbox" checked={item.completed} onChange={() => toggleItem(item.id)} />
+                                    <strong className="action-item-task-text">{item.task}</strong>
+                                </div>
+                                <div style={{ display: 'flex', gap: '0.3rem', alignItems: 'center' }}>
+                                    <button className="button-ai" style={{ fontSize: '0.7rem', padding: '2px 8px' }} onClick={() => setAssistingTask(item)}>
+                                        🤖 Help
+                                    </button>
+                                    {item.completed && (
+                                        <button style={{ background: 'none', border: '1px solid #ddd', borderRadius: '4px', fontSize: '0.7rem', padding: '2px 6px', cursor: 'pointer', color: '#666' }} onClick={() => archiveItem(item.id)} title="Archive">📦</button>
+                                    )}
+                                    <span className={`action-item-priority ${item.priority.toLowerCase()}`}>{item.priority}</span>
+                                    <button className="action-item-delete" onClick={() => deleteItem(item.id)} title="Delete Task">🗑️</button>
+                                </div>
                             </div>
-                        )}
-                    </div>
-                ))}
-                {items.length === 0 && <p>No items yet. Go to Dashboard to generate a plan.</p>}
-            </div>
+                            <p style={{ margin: '0.5rem 0 0 2rem', fontSize: '0.9rem' }}>{item.description}</p>
+                            {item.subtasks && item.subtasks.length > 0 && (
+                                <div style={{ marginLeft: '2rem', marginTop: '0.5rem' }}>
+                                    {item.subtasks.map(sub => (
+                                        <div key={sub.id} style={{ fontSize: '0.85rem', color: '#555' }}>- {sub.text}</div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    ))}
+                    {items.length === 0 && <p>No items yet. Go to Dashboard to generate a plan.</p>}
+                    {items.length > 0 && filteredItems.length === 0 && <p style={{ color: '#666', textAlign: 'center' }}>No tasks match your search.</p>}
+                </div>
+            )}
 
             {assistingTask && (
                 <TaskAssistantModal task={assistingTask} onClose={() => setAssistingTask(null)} />
@@ -1020,7 +1302,11 @@ const DocumentVault: React.FC = () => {
             </div>
 
             <div style={{ marginTop: '1rem' }}>
-                {files.length === 0 && <p>No documents yet.</p>}
+                {files.length === 0 && (
+                    <div style={{ textAlign: 'center', padding: '2rem', color: '#666', backgroundColor: '#f8f9fa', borderRadius: '8px' }}>
+                        <p style={{ fontSize: '0.95rem' }}>Upload court orders, custody agreements, police reports, embassy correspondence — anything related to your case. The AI reads each document, extracts key details, and makes them available to all other tools (Strategy Chat, Comms HQ, etc).</p>
+                    </div>
+                )}
                 {files.map(f => (
                     <div key={f.id} className="action-item">
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -1047,6 +1333,8 @@ const CaseJournal: React.FC = () => {
     const [timelineItems, setTimelineItems] = useState<any[]>([]);
     const [filter, setFilter] = useState<'all' | 'logs' | 'docs'>('all');
     const [analyzingDoc, setAnalyzingDoc] = useState(false);
+    const [editingId, setEditingId] = useState<string | null>(null);
+    const [editText, setEditText] = useState('');
 
     useEffect(() => {
         const saved = localStorage.getItem('caseLogs');
@@ -1055,6 +1343,9 @@ const CaseJournal: React.FC = () => {
 
     useEffect(() => {
         localStorage.setItem('caseLogs', JSON.stringify(logs));
+        if (auth.currentUser && logs.length > 0) {
+            setDoc(doc(db, `users/${auth.currentUser.uid}/data/logs`), { items: logs }).catch(() => {});
+        }
     }, [logs]);
 
     const fetchTimeline = () => {
@@ -1080,26 +1371,29 @@ const CaseJournal: React.FC = () => {
     }, [logs]);
 
     const handleDocUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (e.target.files?.[0]) {
-            if (!confirm("Should this document generate Timeline Events? OK = Yes (Timeline + Vault), Cancel = No (Vault Only)")) {
-                 alert("To store without timeline parsing, please use the 'Digital Vault' tool.");
-                 return;
-            }
-            setAnalyzingDoc(true);
-            const file = e.target.files[0];
+        const files = e.target.files;
+        if (!files || files.length === 0) return;
+        if (files.length > 5) { alert("Maximum 5 files at a time to avoid issues."); return; }
+        if (!confirm(`Upload ${files.length} file(s) and map to timeline? OK = Yes, Cancel = No`)) return;
+
+        setAnalyzingDoc(true);
+        let totalEvents = 0;
+
+        for (let fi = 0; fi < files.length; fi++) {
+            const file = files[fi];
             try {
                  const base64 = await fileToBase64(file);
                  const prompt = `
                  Analyze this legal document. It may describe a HISTORY of events.
-                 
+
                  Return a JSON object with two parts:
                  1. "mainDoc": { "type": "Doc Type", "date": "Filing Date", "summary": "Overall summary" }
                  2. "timelineEvents": An ARRAY of specific events mentioned in the text.
                     Example: [ { "date": "2023-01-01", "description": "Hearing occurred", "type": "Court" } ]
-                 
+
                  If only one event, just put it in the array.
                  `;
-                 
+
                  const result = await ai.models.generateContent({
                     model: "gemini-2.5-pro",
                     contents: [
@@ -1110,9 +1404,9 @@ const CaseJournal: React.FC = () => {
                  });
                  const text = result.text;
                  const analysis = text ? JSON.parse(text) : {};
-                 
+
                  const vaultDoc: VaultDocument = {
-                    id: Date.now().toString(),
+                    id: (Date.now() + fi).toString(),
                     name: file.name,
                     type: analysis.mainDoc?.type || 'Evidence',
                     date: analysis.mainDoc?.date || new Date().toISOString().split('T')[0],
@@ -1123,7 +1417,7 @@ const CaseJournal: React.FC = () => {
                     uploadedAt: new Date().toISOString(),
                     isPublic: false
                 };
-                
+
                 if (auth.currentUser) {
                     await setDoc(doc(db, `users/${auth.currentUser.uid}/documents`, vaultDoc.id), vaultDoc);
                 }
@@ -1131,7 +1425,7 @@ const CaseJournal: React.FC = () => {
 
                 if (analysis.timelineEvents && Array.isArray(analysis.timelineEvents)) {
                     const newLogs: LogEntry[] = analysis.timelineEvents.map((evt: any, i: number) => ({
-                        id: Date.now().toString() + i,
+                        id: (Date.now() + fi * 100 + i).toString(),
                         date: evt.date,
                         time: "09:00",
                         type: evt.type || "Other",
@@ -1141,20 +1435,18 @@ const CaseJournal: React.FC = () => {
                         isPublic: false,
                         sourceDocId: vaultDoc.id
                     }));
-                    
                     setLogs(prev => [...newLogs, ...prev]);
-                    alert(`Found ${newLogs.length} events in document and added to timeline!`);
-                } else {
-                     fetchTimeline();
-                     alert(`Analyzed & Saved: ${vaultDoc.type}`);
+                    totalEvents += newLogs.length;
                 }
             } catch (err) {
-                console.error(err);
-                alert("Analysis failed.");
-            } finally {
-                setAnalyzingDoc(false);
+                console.error(`Failed to process ${file.name}:`, err);
             }
         }
+
+        alert(`Processed ${files.length} file(s). Found ${totalEvents} timeline events.`);
+        fetchTimeline();
+        setAnalyzingDoc(false);
+        e.target.value = '';
     };
 
     const addLog = () => {
@@ -1176,6 +1468,17 @@ const CaseJournal: React.FC = () => {
         if (confirm("Delete this timeline entry?")) {
             setLogs(logs.filter(l => l.id !== id));
         }
+    };
+
+    const startEdit = (log: LogEntry) => {
+        setEditingId(log.id);
+        setEditText(log.description);
+    };
+
+    const saveEdit = (id: string) => {
+        setLogs(logs.map(l => l.id === id ? { ...l, description: editText } : l));
+        setEditingId(null);
+        setEditText('');
     };
 
     const togglePublic = async (id: string, isDoc: boolean, currentVal: boolean) => {
@@ -1302,9 +1605,9 @@ const CaseJournal: React.FC = () => {
                         </button>
                         
                         <div style={{ position: 'relative' }}>
-                            <input type="file" id="timeline-upload" style={{display:'none'}} onChange={handleDocUpload} accept=".pdf,image/*" />
+                            <input type="file" id="timeline-upload" style={{display:'none'}} onChange={handleDocUpload} accept=".pdf,image/*" multiple />
                             <label htmlFor="timeline-upload" className="button-secondary" style={{ cursor: 'pointer', fontSize: '0.85rem', position: 'relative', zIndex: 20 }}>
-                                {analyzingDoc ? 'Parsing Events...' : '➕ Upload & Map to Timeline'}
+                                {analyzingDoc ? 'Analyzing Documents...' : '➕ Upload Docs (up to 5)'}
                             </label>
                         </div>
                     </div>
@@ -1313,6 +1616,12 @@ const CaseJournal: React.FC = () => {
             </div>
 
             <div className="journal-timeline">
+                {timelineItems.length === 0 && (
+                    <div style={{ textAlign: 'center', padding: '2rem', color: '#666' }}>
+                        <p style={{ fontSize: '1.1rem', fontWeight: 600, marginBottom: '0.5rem' }}>No timeline entries yet</p>
+                        <p style={{ fontSize: '0.9rem' }}>Start by uploading documents (court orders, police reports, custody agreements) — the AI will read them and automatically build your timeline. You can also manually log calls, emails, and meetings above.</p>
+                    </div>
+                )}
                 {timelineItems.map((item, i) => {
                     if (filter === 'logs' && item.timelineType !== 'log') return null;
                     if (filter === 'docs' && item.timelineType !== 'doc') return null;
@@ -1347,21 +1656,36 @@ const CaseJournal: React.FC = () => {
                                         🌍
                                     </button>
                                     {!isDoc && (
-                                        <button onClick={() => deleteLog(item.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.2rem', color: '#ba1a1a' }} title="Delete Entry">
-                                            🗑️
-                                        </button>
+                                        <>
+                                            <button onClick={() => startEdit(item)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.2rem' }} title="Edit Entry">
+                                                ✏️
+                                            </button>
+                                            <button onClick={() => deleteLog(item.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.2rem', color: '#ba1a1a' }} title="Delete Entry">
+                                                🗑️
+                                            </button>
+                                        </>
                                     )}
                                 </div>
                             </div>
-                            <p className="journal-description">
-                                {isDoc ? (
-                                    <>
-                                        <strong>{item.name}</strong>
-                                        <br/>
-                                        {item.summary}
-                                    </>
-                                ) : item.description}
-                            </p>
+                            {!isDoc && editingId === item.id ? (
+                                <div style={{ marginTop: '0.5rem' }}>
+                                    <textarea value={editText} onChange={e => setEditText(e.target.value)} rows={3} style={{ width: '100%', boxSizing: 'border-box' }} />
+                                    <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.4rem' }}>
+                                        <button className="button-primary" onClick={() => saveEdit(item.id)} style={{ fontSize: '0.85rem', padding: '0.3rem 0.8rem' }}>Save</button>
+                                        <button className="button-secondary" onClick={() => setEditingId(null)} style={{ fontSize: '0.85rem', padding: '0.3rem 0.8rem' }}>Cancel</button>
+                                    </div>
+                                </div>
+                            ) : (
+                                <p className="journal-description">
+                                    {isDoc ? (
+                                        <>
+                                            <strong>📎 {item.name}</strong>{item.sourceDocId ? '' : ''}
+                                            <br/>
+                                            <span style={{ color: '#555' }}>{item.summary}</span>
+                                        </>
+                                    ) : item.description}
+                                </p>
+                            )}
                         </div>
                     );
                 })}
@@ -1479,6 +1803,9 @@ const ExpensesTracker: React.FC = () => {
 
     useEffect(() => {
         localStorage.setItem('caseExpenses', JSON.stringify(expenses));
+        if (auth.currentUser && expenses.length > 0) {
+            setDoc(doc(db, `users/${auth.currentUser.uid}/data/expenses`), { items: expenses }).catch(() => {});
+        }
     }, [expenses]);
 
     const addExpense = () => {
@@ -1497,9 +1824,55 @@ const ExpensesTracker: React.FC = () => {
 
     const total = expenses.reduce((acc, curr) => acc + curr.amount, 0);
 
+    const exportExpensePDF = () => {
+        const doc = new jsPDF();
+        doc.setFillColor(0, 0, 0);
+        doc.rect(0, 0, 210, 20, 'F');
+        doc.setFontSize(18);
+        doc.setTextColor(255, 255, 255);
+        doc.text("EXPENSE LOG — CHILD RECOVERY", 10, 13);
+        doc.setFontSize(10);
+        doc.setTextColor(100, 100, 100);
+        doc.text(`Generated: ${new Date().toLocaleDateString()}`, 10, 28);
+        doc.text(`Total: $${total.toFixed(2)}`, 140, 28);
+
+        let y = 40;
+        doc.setFontSize(9);
+        doc.setTextColor(0, 0, 0);
+        doc.setFont("helvetica", "bold");
+        doc.text("DATE", 10, y); doc.text("CATEGORY", 40, y); doc.text("DESCRIPTION", 80, y); doc.text("AMOUNT", 170, y);
+        doc.setFont("helvetica", "normal");
+        y += 6;
+        doc.setDrawColor(200); doc.line(10, y, 200, y); y += 4;
+
+        expenses.forEach(exp => {
+            if (y > 275) { doc.addPage(); y = 20; }
+            doc.text(exp.date, 10, y);
+            doc.text(exp.category, 40, y);
+            const descLines = doc.splitTextToSize(exp.description, 80);
+            doc.text(descLines, 80, y);
+            doc.text(`$${exp.amount.toFixed(2)}`, 170, y);
+            y += Math.max(descLines.length * 4.5, 6) + 2;
+        });
+
+        y += 8;
+        doc.setFont("helvetica", "bold");
+        doc.text(`TOTAL: $${total.toFixed(2)}`, 10, y);
+        doc.save("Case_Expenses.pdf");
+    };
+
+    const deleteExpense = (id: string) => {
+        if (confirm("Delete this expense?")) {
+            setExpenses(expenses.filter(e => e.id !== id));
+        }
+    };
+
     return (
         <div className="tool-card" style={{ cursor: 'default' }}>
-            <h2>Expense Tracker</h2>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <h2>Expense Tracker</h2>
+                {expenses.length > 0 && <button className="button-secondary" onClick={exportExpensePDF}>🖨️ Export PDF</button>}
+            </div>
             <div className="form-grid">
                 <select value={newExp.category} onChange={e => setNewExp({...newExp, category: e.target.value as any})}>
                     <option>Legal</option>
@@ -1514,6 +1887,11 @@ const ExpensesTracker: React.FC = () => {
             
             <div style={{ marginTop: '2rem' }}>
                 <h3>Total: ${total.toFixed(2)}</h3>
+                {expenses.length === 0 && (
+                    <div style={{ textAlign: 'center', padding: '2rem', color: '#666', backgroundColor: '#f8f9fa', borderRadius: '8px' }}>
+                        <p style={{ fontSize: '0.95rem' }}>Log every dollar you spend — legal fees, flights, hotels, translators, private investigators. Under the Hague Convention, you may be able to claim restitution for these costs. The more detailed your records, the stronger your claim.</p>
+                    </div>
+                )}
                 <table style={{ width: '100%', textAlign: 'left', borderCollapse: 'collapse' }}>
                     <thead>
                         <tr style={{ borderBottom: '2px solid #eee' }}>
@@ -1521,6 +1899,7 @@ const ExpensesTracker: React.FC = () => {
                             <th style={{ padding: '0.5rem' }}>Desc</th>
                             <th style={{ padding: '0.5rem' }}>Cat</th>
                             <th style={{ padding: '0.5rem' }}>Amt</th>
+                            <th style={{ padding: '0.5rem', width: '30px' }}></th>
                         </tr>
                     </thead>
                     <tbody>
@@ -1530,6 +1909,7 @@ const ExpensesTracker: React.FC = () => {
                                 <td style={{ padding: '0.5rem' }}>{e.description}</td>
                                 <td style={{ padding: '0.5rem' }}>{e.category}</td>
                                 <td style={{ padding: '0.5rem' }}>${e.amount}</td>
+                                <td style={{ padding: '0.5rem' }}><button onClick={() => deleteExpense(e.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ba1a1a' }}>🗑️</button></td>
                             </tr>
                         ))}
                     </tbody>
@@ -1628,7 +2008,7 @@ const LiveGuide: React.FC = () => {
             ctx.fillStyle = '#e1e2ec';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             ctx.lineWidth = 2;
-            ctx.strokeStyle = '#005ac1';
+            ctx.strokeStyle = '#1e3a5f';
             ctx.beginPath();
             const sliceWidth = canvas.width * 1.0 / bufferLength;
             let x = 0;
@@ -1868,6 +2248,107 @@ const CaseSettings: React.FC<{ profile: CaseProfile, setProfile: (p: CaseProfile
         doc.save(`${profile.childName}_Case_Summary.pdf`);
     };
 
+    const handleFullCaseExport = async () => {
+        const pdf = new jsPDF();
+        let y = 10;
+        const addPage = () => { pdf.addPage(); y = 15; };
+        const checkPage = (needed: number) => { if (y + needed > 280) addPage(); };
+
+        // --- PAGE 1: CASE SUMMARY ---
+        pdf.setFillColor(30, 58, 95);
+        pdf.rect(0, 0, 210, 25, 'F');
+        pdf.setFontSize(18); pdf.setTextColor(255, 255, 255);
+        pdf.text("FULL CASE FILE", 10, 16);
+        pdf.setFontSize(8); pdf.text(`Generated: ${new Date().toLocaleDateString()}`, 160, 16);
+        y = 35;
+        pdf.setTextColor(0, 0, 0);
+        pdf.setFontSize(14); pdf.setFont("helvetica", "bold");
+        pdf.text(`Child: ${profile.childName}`, 10, y); y += 7;
+        pdf.setFontSize(10); pdf.setFont("helvetica", "normal");
+        if (profile.childDOB) { pdf.text(`DOB: ${profile.childDOB}`, 10, y); y += 5; }
+        pdf.text(`Missing From: ${profile.fromCountry} → Taken To: ${profile.toCountry}`, 10, y); y += 5;
+        pdf.text(`Date Taken: ${profile.abductionDate}`, 10, y); y += 5;
+        pdf.text(`Custody: ${profile.custodyStatus}`, 10, y); y += 8;
+        Object.entries(profile.caseNumbers || {}).forEach(([k, v]) => { pdf.text(`${k}: ${v}`, 10, y); y += 5; });
+        if (profile.additionalContext) {
+            y += 3; pdf.setFont("helvetica", "bold"); pdf.text("Context:", 10, y); y += 5;
+            pdf.setFont("helvetica", "normal");
+            const ctxLines = pdf.splitTextToSize(profile.additionalContext, 185);
+            pdf.text(ctxLines, 10, y); y += ctxLines.length * 4 + 5;
+        }
+
+        // --- ACTION PLAN ---
+        addPage();
+        pdf.setFontSize(14); pdf.setFont("helvetica", "bold");
+        pdf.text("ACTION PLAN", 10, y); y += 8;
+        pdf.setFontSize(9); pdf.setFont("helvetica", "normal");
+        const savedItems = localStorage.getItem('recoveryHubItems');
+        if (savedItems) {
+            const tasks: ActionItem[] = JSON.parse(savedItems);
+            tasks.forEach(t => {
+                checkPage(10);
+                pdf.text(`[${t.completed ? 'X' : ' '}] ${t.priority} — ${t.task}`, 10, y); y += 5;
+                if (t.description) { const dl = pdf.splitTextToSize(t.description, 170); pdf.text(dl, 15, y); y += dl.length * 4 + 2; }
+            });
+        } else { pdf.text("No tasks generated yet.", 10, y); y += 5; }
+
+        // --- TIMELINE ---
+        addPage();
+        pdf.setFontSize(14); pdf.setFont("helvetica", "bold");
+        pdf.text("EVIDENCE TIMELINE", 10, y); y += 8;
+        pdf.setFontSize(9); pdf.setFont("helvetica", "normal");
+        const savedLogs = localStorage.getItem('caseLogs');
+        if (savedLogs) {
+            const logEntries: LogEntry[] = JSON.parse(savedLogs);
+            logEntries.forEach(l => {
+                checkPage(12);
+                pdf.setFont("helvetica", "bold");
+                pdf.text(`${l.date} — ${l.type}`, 10, y); y += 4;
+                pdf.setFont("helvetica", "normal");
+                const dl = pdf.splitTextToSize(l.description, 180);
+                pdf.text(dl, 10, y); y += dl.length * 4 + 4;
+            });
+        } else { pdf.text("No timeline entries.", 10, y); y += 5; }
+
+        // --- EXPENSES ---
+        addPage();
+        pdf.setFontSize(14); pdf.setFont("helvetica", "bold");
+        pdf.text("EXPENSES", 10, y); y += 8;
+        pdf.setFontSize(9); pdf.setFont("helvetica", "normal");
+        const savedExp = localStorage.getItem('caseExpenses');
+        if (savedExp) {
+            const exps: ExpenseEntry[] = JSON.parse(savedExp);
+            let expTotal = 0;
+            exps.forEach(ex => {
+                checkPage(6);
+                pdf.text(`${ex.date} — ${ex.category} — ${ex.description} — $${ex.amount}`, 10, y); y += 5;
+                expTotal += ex.amount;
+            });
+            y += 3; pdf.setFont("helvetica", "bold"); pdf.text(`TOTAL: $${expTotal.toFixed(2)}`, 10, y); y += 5;
+        } else { pdf.text("No expenses logged.", 10, y); y += 5; }
+
+        // --- CONTACTS ---
+        addPage();
+        pdf.setFontSize(14); pdf.setFont("helvetica", "bold");
+        pdf.text("KEY CONTACTS", 10, y); y += 8;
+        pdf.setFontSize(9); pdf.setFont("helvetica", "normal");
+        const savedContacts = localStorage.getItem('recoveryHubContacts');
+        if (savedContacts) {
+            const contactsList: ContactEntry[] = JSON.parse(savedContacts);
+            contactsList.forEach(c => {
+                checkPage(14);
+                pdf.setFont("helvetica", "bold"); pdf.text(`${c.name} — ${c.role}`, 10, y); y += 4;
+                pdf.setFont("helvetica", "normal");
+                if (c.email) { pdf.text(`Email: ${c.email}`, 10, y); y += 4; }
+                if (c.phone) { pdf.text(`Phone: ${c.phone}`, 10, y); y += 4; }
+                if (c.notes) { const nl = pdf.splitTextToSize(c.notes, 180); pdf.text(nl, 10, y); y += nl.length * 4; }
+                y += 3;
+            });
+        } else { pdf.text("No contacts saved.", 10, y); y += 5; }
+
+        pdf.save(`${profile.childName}_Full_Case_File.pdf`);
+    };
+
     const clearData = () => {
         if (confirm("Are you sure you want to wipe all local data? This cannot be undone.")) {
             localStorage.clear();
@@ -1904,7 +2385,8 @@ const CaseSettings: React.FC<{ profile: CaseProfile, setProfile: (p: CaseProfile
             </div>
             
             <div style={{ marginBottom: '2rem' }}>
-                <button className="button-secondary full-width" onClick={handlePrintSummary}>🖨️ Download One-Page Case Sheet (PDF)</button>
+                <button className="button-secondary full-width" onClick={handlePrintSummary} style={{ marginBottom: '0.5rem' }}>🖨️ Download One-Page Case Sheet (PDF)</button>
+                <button className="button-primary full-width" onClick={handleFullCaseExport}>📁 Export Full Case File (PDF) — Everything</button>
             </div>
 
             <h3>Case IDs</h3>
@@ -2278,6 +2760,10 @@ const TermsOfService: React.FC = () => (
 );
 
 const DataManagement: React.FC = () => {
+    const [exporting, setExporting] = useState(false);
+    const [importing, setImporting] = useState(false);
+    const [importStatus, setImportStatus] = useState('');
+
     const clearData = () => {
         if (confirm("Are you sure you want to wipe all local data? This cannot be undone.")) {
             localStorage.clear();
@@ -2285,20 +2771,157 @@ const DataManagement: React.FC = () => {
         }
     };
 
+    const handleExport = async () => {
+        setExporting(true);
+        try {
+            // Gather all localStorage data
+            const localData: Record<string, any> = {};
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                if (key) {
+                    try { localData[key] = JSON.parse(localStorage.getItem(key)!); }
+                    catch { localData[key] = localStorage.getItem(key); }
+                }
+            }
+
+            // Gather all IndexedDB vault docs (metadata only — files are too large)
+            let vaultMetadata: VaultDocument[] = [];
+            try {
+                vaultMetadata = await getFilesFromLocalVault();
+            } catch (e) { console.error('Could not read vault', e); }
+
+            // Gather actual file blobs from IndexedDB
+            const vaultFiles: { id: string; name: string; dataUrl: string }[] = [];
+            try {
+                const idb = await openVaultDB();
+                const tx = idb.transaction(STORE_NAME, 'readonly');
+                const store = tx.objectStore(STORE_NAME);
+                const allReq = store.getAll();
+                await new Promise<void>((resolve, reject) => {
+                    allReq.onsuccess = () => {
+                        const records = allReq.result;
+                        records.forEach((rec: any) => {
+                            if (rec.fileBlob) {
+                                const reader = new FileReader();
+                                reader.onload = () => {
+                                    vaultFiles.push({ id: rec.id, name: rec.name, dataUrl: reader.result as string });
+                                    if (vaultFiles.length === records.filter((r: any) => r.fileBlob).length) resolve();
+                                };
+                                reader.readAsDataURL(rec.fileBlob);
+                            }
+                        });
+                        if (records.filter((r: any) => r.fileBlob).length === 0) resolve();
+                    };
+                    allReq.onerror = () => reject(allReq.error);
+                });
+            } catch (e) { console.error('Could not export file blobs', e); }
+
+            const exportData = {
+                version: '0.2.0',
+                exportDate: new Date().toISOString(),
+                localStorage: localData,
+                vaultMetadata,
+                vaultFiles
+            };
+
+            const blob = new Blob([JSON.stringify(exportData)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `RecoveryHub_Backup_${new Date().toISOString().split('T')[0]}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+            alert('Backup downloaded! Save this file somewhere safe. You can import it on any device.');
+        } catch (err) {
+            console.error(err);
+            alert('Export failed. Try again.');
+        } finally {
+            setExporting(false);
+        }
+    };
+
+    const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        if (!confirm("This will REPLACE all current data with the backup. Are you sure?")) return;
+
+        setImporting(true);
+        setImportStatus('Reading backup file...');
+        try {
+            const text = await file.text();
+            const data = JSON.parse(text);
+
+            if (!data.version || !data.localStorage) {
+                alert('Invalid backup file.');
+                return;
+            }
+
+            // Restore localStorage
+            setImportStatus('Restoring case data...');
+            Object.entries(data.localStorage).forEach(([key, value]) => {
+                localStorage.setItem(key, typeof value === 'string' ? value : JSON.stringify(value));
+            });
+
+            // Restore vault files if present
+            if (data.vaultFiles && data.vaultFiles.length > 0) {
+                setImportStatus(`Restoring ${data.vaultFiles.length} documents...`);
+                const idb = await openVaultDB();
+                for (const vf of data.vaultFiles) {
+                    try {
+                        const resp = await fetch(vf.dataUrl);
+                        const blob = await resp.blob();
+                        const meta = data.vaultMetadata?.find((m: any) => m.id === vf.id) || {};
+                        const tx = idb.transaction(STORE_NAME, 'readwrite');
+                        tx.objectStore(STORE_NAME).put({ ...meta, id: vf.id, name: vf.name, fileBlob: blob });
+                    } catch (err) {
+                        console.error(`Failed to restore file ${vf.name}`, err);
+                    }
+                }
+            }
+
+            setImportStatus('Done! Reloading...');
+            setTimeout(() => window.location.reload(), 1000);
+        } catch (err) {
+            console.error(err);
+            alert('Import failed. The file may be corrupted.');
+        } finally {
+            setImporting(false);
+        }
+    };
+
     return (
         <div className="tool-card" style={{ cursor: 'default' }}>
             <h2>Data Management</h2>
-            <p>Your privacy and safety are our top priority. You have full control over your data.</p>
-            <div style={{ marginTop: '1rem', padding: '1rem', border: '1px solid #ffccbc', backgroundColor: '#fff3e0', borderRadius: '8px' }}>
-                <h3 style={{ color: '#d84315', marginTop: 0 }}>Danger Zone</h3>
-                <p>This will permanently delete all Case Profiles, Journals, and Checklists stored on this browser.</p>
+            <p>Your data is stored in this browser on this device. Use these tools to back it up or move it.</p>
+
+            <div style={{ marginTop: '1.5rem', padding: '1.25rem', backgroundColor: '#f8f9fa', borderRadius: '8px', border: '1px solid rgba(0,0,0,0.06)' }}>
+                <h3 style={{ marginTop: 0 }}>📦 Backup & Restore</h3>
+                <p style={{ fontSize: '0.9rem', color: '#555' }}>Download everything — case profile, action plan, timeline, expenses, contacts, and uploaded documents — as a single backup file. Import it on any device to pick up where you left off.</p>
+                <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1rem', flexWrap: 'wrap' }}>
+                    <button className="button-primary" onClick={handleExport} disabled={exporting}>
+                        {exporting ? 'Preparing backup...' : '⬇️ Download Full Backup'}
+                    </button>
+                    <div>
+                        <input type="file" id="import-backup" accept=".json" onChange={handleImport} style={{ display: 'none' }} />
+                        <label htmlFor="import-backup" className="button-secondary" style={{ cursor: 'pointer', display: 'inline-block' }}>
+                            {importing ? 'Importing...' : '⬆️ Import Backup File'}
+                        </label>
+                    </div>
+                </div>
+                {importStatus && <p style={{ fontSize: '0.85rem', color: '#1e3a5f', marginTop: '0.5rem' }}>{importStatus}</p>}
+                <p style={{ fontSize: '0.8rem', color: '#888', marginTop: '0.75rem' }}>Note: Very large files (40MB+ PDFs) may make the backup file big. The backup includes your actual documents so nothing is lost.</p>
+            </div>
+
+            <div style={{ marginTop: '1.5rem', padding: '1.25rem', border: '1px solid #ffccbc', backgroundColor: '#fff3e0', borderRadius: '8px' }}>
+                <h3 style={{ color: '#d84315', marginTop: 0 }}>⚠️ Danger Zone</h3>
+                <p>This will permanently delete all data stored in this browser. Make sure you have a backup first.</p>
                 <button className="button-danger" onClick={clearData}>Wipe All Local Data</button>
             </div>
         </div>
     );
 };
 
-const OnboardingWizard: React.FC<{ onComplete: (p: CaseProfile) => void }> = ({ onComplete }) => {
+const OnboardingWizard: React.FC<{ onComplete: (p: CaseProfile) => void, onPreventionClick?: () => void }> = ({ onComplete, onPreventionClick }) => {
     const [step, setStep] = useState(0);
     const [data, setData] = useState<Partial<CaseProfile>>({ completedActions: [] });
     const [analyzingDoc, setAnalyzingDoc] = useState(false);
@@ -2370,6 +2993,12 @@ const OnboardingWizard: React.FC<{ onComplete: (p: CaseProfile) => void }> = ({ 
     return (
         <div className="tool-card">
             <h2>Case Setup Wizard</h2>
+            {onPreventionClick && step === 0 && (
+                <div className="tool-card highlight" onClick={onPreventionClick} style={{ marginBottom: '1.5rem', cursor: 'pointer' }}>
+                    <h3>🛡️ Worried About Abduction?</h3>
+                    <p>No case yet? Get a country-specific prevention checklist you can download right now.</p>
+                </div>
+            )}
             {step === 0 && (
                 <div className="form-grid">
                     <div>
@@ -2465,7 +3094,7 @@ const OnboardingWizard: React.FC<{ onComplete: (p: CaseProfile) => void }> = ({ 
                         <label>Upload Key Documents (Optional)</label>
                         <p style={{fontSize: '0.9rem', color: '#666'}}>Court orders or police reports will be analyzed and saved to your Vault.</p>
                         <input type="file" onChange={handleDocUpload} accept=".pdf,image/*" style={{ marginBottom: '0.5rem' }} />
-                        {analyzingDoc && <div style={{ fontSize: '0.8rem', color: '#005ac1' }}>Analyzing document... please wait...</div>}
+                        {analyzingDoc && <div style={{ fontSize: '0.8rem', color: '#1e3a5f' }}>Analyzing document... please wait...</div>}
                     
                         <label style={{marginTop: '1rem', display: 'block'}}>Is there anything else?</label>
                         <p style={{fontSize: '0.9rem', color: '#666'}}>Context affects strategy (e.g., "Child has medical needs," "History of domestic violence," "Abductor has dual citizenship").</p>
@@ -2524,7 +3153,7 @@ const GeminiResponseRenderer: React.FC<{ items: ChecklistItem[], onToggleItem: (
     );
 };
 
-const PreventionSteps: React.FC<{ setView: (view: View) => void }> = ({ setView }) => {
+const PreventionSteps: React.FC<{ profile: CaseProfile, onBack: () => void }> = ({ profile, onBack }) => {
     const [country, setCountry] = useState('');
     const [items, setItems] = useState<ChecklistItem[]>([]);
     const [loading, setLoading] = useState(false);
@@ -2605,7 +3234,7 @@ Format the response as a clear, easy-to-follow list. Use markdown for formatting
 
     return (
         <div className="tool-card" style={{ cursor: 'default' }}>
-            <button className="button-secondary" onClick={() => setView('dashboard')} style={{ marginBottom: '1rem' }}>&larr; Back to Dashboard</button>
+            <button className="button-secondary" onClick={onBack} style={{ marginBottom: '1rem' }}>&larr; Back</button>
             <h2>Prevention Steps</h2>
             <p style={{ color: '#555', marginBottom: '1.5rem' }}>Worried your co-parent may try to take your child out of the country? Enter your country below and we'll generate a specific, actionable prevention checklist you can start on right now.</p>
             <form onSubmit={handleSubmit} className="form-grid">
@@ -2700,19 +3329,28 @@ const ContactListBuilder: React.FC<{ profile: CaseProfile }> = ({ profile }) => 
         setSuggesting(true);
         try {
             const prompt = `
-            Suggest 5-8 key contacts/agencies a parent should reach out to for an international child abduction case.
-            Child taken from: ${profile.fromCountry}
-            Child taken to: ${profile.toCountry}
+            You are helping a parent whose child was abducted from ${profile.fromCountry} to ${profile.toCountry}.
+            Custody status: ${profile.custodyStatus}.
 
-            For EACH contact, provide:
-            - "name": Official name of agency/organization
-            - "role": What they do (e.g., "Central Authority for Hague Convention")
-            - "email": Official contact email if commonly known (or leave blank)
-            - "phone": Official phone if commonly known (or leave blank)
-            - "notes": Why this contact is important and what to ask them
+            Generate 8-12 SPECIFIC, ACTIONABLE contacts they need. Go DEEP — not just the obvious "call police" stuff. Think like someone who has actually been through this.
 
-            Include: Local police, FBI (if US), State Department / Ministry of Foreign Affairs, Central Authority in both countries, NCMEC/ICMEC, relevant embassy/consulate, a specialized family law organization.
-            Return JSON array.
+            MUST INCLUDE (with real details where possible):
+            1. The SPECIFIC Central Authority for Hague Convention in ${profile.fromCountry} — name the actual office, not just "Central Authority"
+            2. The SPECIFIC Central Authority in ${profile.toCountry} — same, name the office
+            3. The specific embassy/consulate of ${profile.fromCountry} in ${profile.toCountry} — city-specific if possible
+            4. A specialized international family law attorney referral organization (not just "find a lawyer" — name the org like IAML, Reunite, etc.)
+            5. The specific government hotline for child abduction cases in ${profile.fromCountry} (e.g., US = Office of Children's Issues 1-888-407-4747)
+            6. NCMEC or equivalent in ${profile.fromCountry}
+            7. ICMEC (International Centre for Missing & Exploited Children)
+            8. A family law attorney referral in ${profile.toCountry} — name a specific legal aid org or bar association
+            9. Interpol — specifically the ${profile.toCountry} NCB (National Central Bureau)
+            10. Any country-specific NGOs that help with parental abduction cases involving ${profile.toCountry}
+
+            DO NOT suggest generic contacts like "local police" without specifying WHICH police jurisdiction.
+            DO provide actual phone numbers and emails where they are publicly known.
+            DO explain in notes EXACTLY what to say when you call and what to ask for.
+
+            Return JSON array with: name, role, email (or ""), phone (or ""), notes (include what to say/ask).
             `;
 
             const result = await ai.models.generateContent({
@@ -2778,7 +3416,12 @@ const ContactListBuilder: React.FC<{ profile: CaseProfile }> = ({ profile }) => 
             </div>
 
             <div>
-                {contacts.length === 0 && <p style={{ textAlign: 'center', color: '#666' }}>No contacts yet. Add manually or use AI Suggest.</p>}
+                {contacts.length === 0 && (
+                    <div style={{ textAlign: 'center', padding: '2rem', color: '#666', backgroundColor: '#f8f9fa', borderRadius: '8px' }}>
+                        <p style={{ fontSize: '0.95rem', marginBottom: '0.5rem' }}>You'll need lawyers, government officials, embassy contacts, and maybe an investigator.</p>
+                        <p style={{ fontSize: '0.9rem' }}>Click <strong>"AI Suggest Contacts"</strong> below to get country-specific recommendations — or add your own.</p>
+                    </div>
+                )}
                 {contacts.map(c => (
                     <div key={c.id} className="contact-card">
                         <div className="contact-card-info">
@@ -2829,42 +3472,205 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { has
     }
 }
 
+// --- SUPPORT & MENTAL HEALTH RESOURCES ---
+
+const SupportResources: React.FC<{ profile: CaseProfile }> = ({ profile }) => {
+    const [resources, setResources] = useState<{ name: string; type: string; location: string; description: string; contact: string; url: string }[]>([]);
+    const [loading, setLoading] = useState(false);
+    const [hasSearched, setHasSearched] = useState(false);
+
+    const findResources = async () => {
+        setLoading(true);
+        try {
+            const prompt = `
+            A parent is going through an international child abduction crisis.
+            They live in: ${profile.fromCountry}
+            Their child is in: ${profile.toCountry}
+            ${profile.childName ? `Their child's name is ${profile.childName}.` : ''}
+
+            Find REAL, SPECIFIC support resources for them. Include:
+
+            1. **Mental health / therapy:**
+               - Therapists or organizations that specialize in parental abduction trauma or family separation
+               - Crisis hotlines in ${profile.fromCountry}
+               - Online therapy options (e.g., BetterHelp, but also specialized ones)
+
+            2. **Support groups:**
+               - Parent support groups specifically for international child abduction (e.g., Bring Abducted Children Home, Left Behind Parents groups)
+               - Online communities and forums
+               - Facebook groups or organizations
+
+            3. **NGOs and advocacy:**
+               - Organizations that advocate for or support left-behind parents
+               - Legal aid specifically for international custody cases
+               - Child welfare organizations in both ${profile.fromCountry} and ${profile.toCountry}
+
+            4. **For the child:**
+               - Resources about helping a child after reunion
+               - Child psychologists who specialize in abduction cases
+
+            5. **Financial assistance:**
+               - Grants or funds that help parents with legal costs in international custody cases
+               - Pro bono legal organizations
+
+            Be SPECIFIC. Include real organization names, real URLs where known, real phone numbers. Do NOT make up organizations.
+            Return JSON array with: name, type (therapy/support-group/ngo/legal-aid/financial/child-resources), location, description, contact (phone/email or ""), url (or "").
+            `;
+
+            const result = await ai.models.generateContent({
+                model: 'gemini-2.5-pro',
+                contents: prompt,
+                config: { responseMimeType: "application/json" }
+            });
+            const text = result.text;
+            if (text) setResources(JSON.parse(text));
+            setHasSearched(true);
+        } catch (e) {
+            console.error(e);
+            alert('Search failed. Try again.');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const typeLabels: Record<string, string> = {
+        'therapy': '🧠 Mental Health', 'support-group': '🤝 Support Group', 'ngo': '🏛️ NGO/Advocacy',
+        'legal-aid': '⚖️ Legal Aid', 'financial': '💰 Financial Help', 'child-resources': '👶 For the Child'
+    };
+
+    return (
+        <div className="tool-card" style={{ cursor: 'default' }}>
+            <h2>Support & Mental Health</h2>
+            <p style={{ color: '#555', marginBottom: '1rem' }}>
+                {profile.childName ? `Fighting for ${profile.childName}` : 'This fight'} is brutal on your mental health. You don't have to do this alone. This tool finds therapists, support groups, NGOs, and financial resources specific to your situation and location.
+            </p>
+
+            {!hasSearched && (
+                <button className="button-primary" onClick={findResources} disabled={loading} style={{ width: '100%' }}>
+                    {loading ? 'Searching for resources...' : `Find Resources for ${profile.fromCountry} & ${profile.toCountry}`}
+                </button>
+            )}
+
+            {loading && <div className="prevention-spinner" style={{ marginTop: '1rem' }}></div>}
+
+            {resources.length > 0 && (
+                <div style={{ marginTop: '1.5rem' }}>
+                    {['therapy', 'support-group', 'ngo', 'legal-aid', 'financial', 'child-resources'].map(type => {
+                        const filtered = resources.filter(r => r.type === type);
+                        if (filtered.length === 0) return null;
+                        return (
+                            <div key={type} style={{ marginBottom: '1.5rem' }}>
+                                <h3 style={{ fontSize: '1rem', marginBottom: '0.5rem' }}>{typeLabels[type] || type}</h3>
+                                {filtered.map((r, i) => (
+                                    <div key={i} className="action-item" style={{ marginBottom: '0.5rem' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                            <div>
+                                                <strong>{r.name}</strong>
+                                                {r.location && <span style={{ fontSize: '0.8rem', color: '#666', marginLeft: '0.5rem' }}>{r.location}</span>}
+                                            </div>
+                                            {r.url && <a href={r.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: '0.8rem', color: '#1e3a5f', whiteSpace: 'nowrap' }}>Visit →</a>}
+                                        </div>
+                                        <p style={{ fontSize: '0.88rem', color: '#444', margin: '0.25rem 0' }}>{r.description}</p>
+                                        {r.contact && <p style={{ fontSize: '0.8rem', color: '#1e3a5f' }}>{r.contact}</p>}
+                                    </div>
+                                ))}
+                            </div>
+                        );
+                    })}
+                    <button className="button-secondary" onClick={findResources} disabled={loading} style={{ marginTop: '0.5rem' }}>
+                        🔄 Search Again
+                    </button>
+                </div>
+            )}
+
+            {hasSearched && resources.length === 0 && !loading && (
+                <p style={{ color: '#666', marginTop: '1rem' }}>No resources found. Try searching again.</p>
+            )}
+
+            <div className="disclaimer-block" style={{ marginTop: '1.5rem' }}>
+                <strong>Important:</strong> If you're in a crisis, call <strong>988</strong> (US Suicide & Crisis Lifeline) or your local emergency number. These AI-suggested resources should be verified independently.
+            </div>
+        </div>
+    );
+};
+
+// --- HOW IT WORKS GUIDE ---
+
+const HowItWorks: React.FC<{ onBack: () => void }> = ({ onBack }) => {
+    return (
+        <div className="tool-card" style={{ cursor: 'default' }}>
+            <button className="button-secondary" onClick={onBack} style={{ marginBottom: '1rem' }}>&larr; Back</button>
+            <h2>How This Works</h2>
+            <p style={{ color: '#555', marginBottom: '1.5rem' }}>This is a free tool built by a parent going through this. Here's what it does and how to use it.</p>
+
+            <div className="how-it-works-section">
+                <h3>🔒 Your data stays on YOUR device</h3>
+                <p>Everything you enter — documents, logs, case details — is stored <strong>in your browser</strong> on this specific computer. Nothing sensitive goes to a server. That means:</p>
+                <ul>
+                    <li>Nobody else can see your data</li>
+                    <li>If you clear your browser data or use a different computer, it's gone</li>
+                    <li>Use the <strong>same browser on the same machine</strong> every time</li>
+                    <li>Sign in with Google to back up your case profile to the cloud</li>
+                    <li>Use <strong>Data Management</strong> to export a backup you can move to another device</li>
+                </ul>
+            </div>
+
+            <div className="how-it-works-section">
+                <h3>📋 Suggested order of operations</h3>
+                <ol>
+                    <li><strong>Fill out your case profile</strong> — the more detail you give, the better the AI can help you</li>
+                    <li><strong>Generate your Action Plan</strong> — this creates a checklist of legal and practical steps specific to your countries</li>
+                    <li><strong>Upload key documents</strong> — court orders, police reports, custody agreements go in the Evidence Locker. The AI reads them and builds your timeline automatically</li>
+                    <li><strong>Use Strategy Chat when stuck</strong> — describe your problem, attach a document, get tactical advice and new tasks</li>
+                    <li><strong>Log everything</strong> — every call, email, meeting goes in the Evidence Locker. It builds a court-ready chronology</li>
+                    <li><strong>Draft emails with Comms HQ</strong> — professional emails to lawyers, embassies, police, government agencies</li>
+                    <li><strong>Track expenses</strong> — every dollar you spend on recovery can be claimed later</li>
+                    <li><strong>Build a campaign page</strong> — a public missing child page you can share</li>
+                </ol>
+            </div>
+
+            <div className="how-it-works-section">
+                <h3>🛠️ What each tool does</h3>
+                <div className="how-grid">
+                    <div><strong>Action Plan</strong><br/>Your master checklist. AI generates tasks based on your case. Check them off as you go. You can always add more.</div>
+                    <div><strong>Strategy Chat</strong><br/>Like talking to someone who knows Hague Convention cases. Describe what's happening — it gives tactical advice and suggests tasks.</div>
+                    <div><strong>Evidence Locker</strong><br/>Upload documents. Log calls, emails, meetings. Everything gets mapped to a timeline you can export as a PDF for your lawyer or court.</div>
+                    <div><strong>Digital Vault</strong><br/>Where your uploaded files actually live. The AI extracts text from them so other tools can reference them.</div>
+                    <div><strong>Comms HQ</strong><br/>Writes professional emails for you. Pick a recipient type, describe what you need, and it drafts something you can copy and send.</div>
+                    <div><strong>Live Strategy Guide</strong><br/>Voice-based AI companion. Use it when you're in a crisis moment and need to talk through what's happening.</div>
+                    <div><strong>Expense Tracker</strong><br/>Log every cost — legal fees, flights, investigations, admin. Exports to PDF for restitution claims.</div>
+                    <div><strong>Contacts</strong><br/>Your key contacts organized by role. AI can suggest who you should be talking to based on your countries.</div>
+                    <div><strong>Campaign Site</strong><br/>Creates a public missing child page with photo, story, timeline, and contact info. Shareable link.</div>
+                    <div><strong>Prevention Steps</strong><br/>If abduction hasn't happened yet — enter your country and get a specific prevention checklist you can download.</div>
+                    <div><strong>Support & Mental Health</strong><br/>Finds therapists, support groups, NGOs, legal aid, and financial help specific to your countries. This fight destroys your mental health — use this.</div>
+                </div>
+            </div>
+
+            <div className="how-it-works-section">
+                <h3>⚠️ What this is NOT</h3>
+                <ul>
+                    <li>This is <strong>not legal advice</strong>. Always work with a lawyer.</li>
+                    <li>The AI is helpful but it can be wrong. Verify everything.</li>
+                    <li>This is an MVP — it's being improved constantly based on feedback from parents using it.</li>
+                </ul>
+            </div>
+
+            <p style={{ fontSize: '0.85rem', color: '#666', marginTop: '1.5rem' }}>Built by a parent going through this. <a href="https://rescuecharlotte.org" target="_blank" rel="noopener noreferrer" style={{ color: '#1e3a5f' }}>rescuecharlotte.org</a></p>
+        </div>
+    );
+};
+
 // --- WELCOME DISCLAIMER POPUP ---
 
 const WelcomeDisclaimer: React.FC<{ onDismiss: () => void }> = ({ onDismiss }) => {
     return (
         <div className="welcome-overlay">
-            <div className="welcome-modal">
-                <h2>Hey — quick heads up before you dive in.</h2>
-                <p>This is an <strong>MVP</strong> (minimum viable product). That means it works, and some people have found it genuinely helpful, but it's still being built. Things may break. If they do, refresh and try again — your data won't be lost.</p>
-
-                <div className="welcome-section">
-                    <h3>Your data stays on YOUR device</h3>
-                    <p>Right now, documents and case files are stored <strong>locally in your browser</strong> on your machine. Nothing sensitive goes to a database. That means there's essentially no security risk — but it also means if you switch devices or clear your browser data, you'll lose what you've saved. Use the same browser on the same machine and you're good.</p>
-                    <p>If I see this tool helping enough people, I'll build out proper cloud storage with encryption. For now, this keeps things simple and safe.</p>
-                </div>
-
-                <div className="welcome-section">
-                    <h3>What this thing actually does</h3>
-                    <ul>
-                        <li><strong>Prevention checklist</strong> — worried they might take your kid? Get country-specific steps right now</li>
-                        <li><strong>Builds you a personalized action plan</strong> based on your situation</li>
-                        <li><strong>Drafts professional emails</strong> to lawyers, police, embassies, and government agencies</li>
-                        <li><strong>Tracks your evidence</strong> with a timeline and document vault</li>
-                        <li><strong>Creates a public campaign page</strong> to help find your child</li>
-                        <li><strong>Logs expenses</strong> for future restitution claims</li>
-                        <li><strong>AI strategy chat</strong> that actually knows about Hague Convention cases</li>
-                    </ul>
-                </div>
-
-                <div className="welcome-section">
-                    <h3>The more you put in, the more useful it gets</h3>
-                    <p>Seriously — by a mile. The AI uses everything you enter to give you better, more specific guidance. Fill out your case profile, upload documents, log what's happened. The more context it has, the better it can help.</p>
-                </div>
-
-                <p style={{ fontSize: '0.85rem', color: '#666', marginTop: '1rem' }}>Built by a parent going through this. Not from a place of success — from a place of trying. <a href="https://rescuecharlotte.org" target="_blank" rel="noopener noreferrer" style={{ color: '#005ac1' }}>rescuecharlotte.org</a></p>
-
-                <button className="button-primary" onClick={onDismiss} style={{ marginTop: '1.5rem', width: '100%', padding: '0.9rem', fontSize: '1.05rem' }}>Got it — let me in</button>
+            <div className="welcome-modal compact">
+                <h2>Quick heads up</h2>
+                <p>This is an <strong>MVP</strong> — it works and people have found it helpful, but it's still being built. Things may break.</p>
+                <p>Your data is stored <strong>locally in your browser</strong>. Nothing sensitive leaves your machine. Use the same browser and you're good.</p>
+                <p style={{ fontSize: '0.85rem', color: '#666', marginTop: '0.75rem' }}>Built by a parent going through this. <a href="https://rescuecharlotte.org" target="_blank" rel="noopener noreferrer" style={{ color: '#1e3a5f' }}>rescuecharlotte.org</a></p>
+                <button className="button-primary" onClick={onDismiss} style={{ marginTop: '1rem', width: '100%', padding: '0.75rem', fontSize: '1rem' }}>Got it</button>
             </div>
         </div>
     );
@@ -2938,7 +3744,31 @@ const App: React.FC = () => {
             localStorage.setItem('recoveryHubItems', JSON.stringify(items));
              if (user) syncDataToCloud(caseProfile, items);
         }
-    }, [items, user]); 
+    }, [items, user]);
+
+    // Track last active view for "pick up where you left off"
+    useEffect(() => {
+        if (view !== 'onboarding' && view !== 'dashboard') {
+            localStorage.setItem('recoveryHubLastView', view);
+            localStorage.setItem('recoveryHubLastActive', new Date().toISOString());
+        }
+    }, [view]);
+
+    const lastView = localStorage.getItem('recoveryHubLastView') as View | null;
+    const lastActive = localStorage.getItem('recoveryHubLastActive');
+    const [showWelcomeBack, setShowWelcomeBack] = useState(() => {
+        if (!lastView || !lastActive) return false;
+        const hoursSince = (Date.now() - new Date(lastActive).getTime()) / (1000 * 60 * 60);
+        return hoursSince > 1; // Only show if they've been away more than an hour
+    });
+
+    const viewLabels: Record<string, string> = {
+        myChecklist: 'Action Plan', taskBrainstormer: 'Strategy Chat', caseJournal: 'Evidence Locker',
+        documentVault: 'Digital Vault', correspondence: 'Comms HQ', expenses: 'Expense Tracker',
+        contactList: 'Contacts', campaignBuilder: 'Campaign Site', prevention: 'Prevention Steps',
+        liveConversation: 'Live Guide', knowledgeBase: 'Knowledge Base', caseSettings: 'Settings',
+        howItWorks: 'How This Works', supportResources: 'Support & Mental Health'
+    };
 
     const handleSignIn = async () => {
         try {
@@ -2976,6 +3806,18 @@ const App: React.FC = () => {
                 dossierHistory: [...history, d] 
             };
         });
+    };
+
+    const handleAddSuggestedTask = (taskText: string, priority: string) => {
+        const newTask: ActionItem = {
+            id: Date.now().toString(),
+            category: 'AI Suggested',
+            task: taskText,
+            description: '',
+            priority: (priority as ActionItem['priority']) || 'High',
+            completed: false
+        };
+        setItems(prev => [newTask, ...prev]);
     };
 
     const handleStart = async () => {
@@ -3065,6 +3907,71 @@ const App: React.FC = () => {
     };
 
     const [publicCampaignId, setPublicCampaignId] = useState<string | null>(null);
+    const [sidebarOpen, setSidebarOpen] = useState(false);
+    const [nudgeDismissed, setNudgeDismissed] = useState(() => !!localStorage.getItem('recoveryHubNudgeDismissed'));
+
+    const dismissNudge = () => { setNudgeDismissed(true); localStorage.setItem('recoveryHubNudgeDismissed', 'true'); };
+    const [notificationsEnabled, setNotificationsEnabled] = useState(() => localStorage.getItem('recoveryHubNotifications') === 'true');
+
+    const toggleNotifications = async () => {
+        if (notificationsEnabled) {
+            setNotificationsEnabled(false);
+            localStorage.removeItem('recoveryHubNotifications');
+            return;
+        }
+        if (!('Notification' in window)) { alert('This browser does not support notifications.'); return; }
+        const perm = await Notification.requestPermission();
+        if (perm === 'granted') {
+            setNotificationsEnabled(true);
+            localStorage.setItem('recoveryHubNotifications', 'true');
+            new Notification('Recovery Hub', { body: 'Reminders are now active. You\'ll get a nudge if you haven\'t checked in.', icon: '🏠' });
+        } else {
+            alert('Notification permission denied. You can change this in your browser settings.');
+        }
+    };
+
+    // Notification check-in system: fires on app load
+    useEffect(() => {
+        if (!notificationsEnabled || !('Notification' in window) || Notification.permission !== 'granted') return;
+        const lastVisit = localStorage.getItem('recoveryHubLastVisit');
+        const now = Date.now();
+        localStorage.setItem('recoveryHubLastVisit', now.toString());
+
+        if (lastVisit) {
+            const hoursSinceLastVisit = (now - parseInt(lastVisit)) / (1000 * 60 * 60);
+            // If 24+ hours since last visit, show "welcome back" nudge
+            if (hoursSinceLastVisit >= 24 && caseProfile.childName) {
+                setTimeout(() => {
+                    new Notification(`Keep going for ${caseProfile.childName}`, {
+                        body: `It's been ${Math.floor(hoursSinceLastVisit / 24)} day${Math.floor(hoursSinceLastVisit / 24) > 1 ? 's' : ''} since your last session. Every action counts.`,
+                    });
+                }, 3000);
+            }
+        }
+
+        // Check for stale immediate-priority tasks
+        const immediateTasks = items.filter(i => !i.completed && i.priority === 'Immediate');
+        if (immediateTasks.length > 0 && lastVisit) {
+            const hoursSince = (now - parseInt(lastVisit)) / (1000 * 60 * 60);
+            if (hoursSince >= 8) {
+                setTimeout(() => {
+                    new Notification(`${immediateTasks.length} urgent task${immediateTasks.length > 1 ? 's' : ''} waiting`, {
+                        body: immediateTasks[0].task,
+                    });
+                }, 8000);
+            }
+        }
+
+        // Set an interval to remind every 4 hours while tab is open
+        const interval = setInterval(() => {
+            if (document.hidden && caseProfile.childName) {
+                new Notification('Recovery Hub Check-In', { body: `Don't forget to log today's activity for ${caseProfile.childName}'s case.` });
+            }
+        }, 4 * 60 * 60 * 1000); // 4 hours
+
+        return () => clearInterval(interval);
+    }, [notificationsEnabled, caseProfile.childName, items]);
+
     useEffect(() => {
         const params = new URLSearchParams(window.location.search);
         const c = params.get('c');
@@ -3075,83 +3982,122 @@ const App: React.FC = () => {
         return <PublicCampaignViewer id={publicCampaignId} />;
     }
 
+    // Navigation items for the sidebar
+    const navItems: { icon: string; label: string; view: View; section?: string }[] = [
+        { icon: '🏠', label: 'Dashboard', view: 'dashboard', section: 'Overview' },
+        { icon: '📋', label: 'My Tasks', view: 'myChecklist', section: 'Case Tools' },
+        { icon: '💡', label: 'Ask AI', view: 'taskBrainstormer' },
+        { icon: '🗂️', label: 'Case Journal', view: 'caseJournal' },
+        { icon: '🔒', label: 'Uploaded Files', view: 'documentVault' },
+        { icon: '📧', label: 'Draft Emails', view: 'correspondence' },
+        { icon: '💰', label: 'Expenses', view: 'expenses' },
+        { icon: '📇', label: 'Contacts', view: 'contactList' },
+        { icon: '🎙️', label: 'Talk to AI', view: 'liveConversation', section: 'AI Help' },
+        { icon: '📚', label: 'Guides & Templates', view: 'knowledgeBase' },
+        { icon: '🧠', label: 'Support & Wellbeing', view: 'supportResources' },
+        { icon: '📣', label: 'Public Campaign', view: 'campaignBuilder', section: 'More' },
+        { icon: '🛡️', label: 'Prevention', view: 'prevention' },
+        { icon: '❓', label: 'How This Works', view: 'howItWorks' },
+        { icon: '⚙️', label: 'Settings', view: 'caseSettings' },
+    ];
+
+    const navigateTo = (v: View) => { setView(v); setSidebarOpen(false); };
+
+    // Sign-in nudge: show at key moments when not signed in
+    const showSignInNudge = !user && !nudgeDismissed && caseProfile.isProfileComplete && (items.length >= 3 || view === 'expenses' || view === 'documentVault' || view === 'caseJournal');
+
     const renderView = () => {
         switch (view) {
             case 'onboarding': return <OnboardingWizard onComplete={(p) => { setCaseProfile(p); setView('dashboard'); }} />;
             case 'dashboard': return (
                 <div className="dashboard-container">
+                    {showWelcomeBack && lastView && (
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem 1rem', backgroundColor: 'var(--md-sys-color-primary-container)', borderRadius: 'var(--md-sys-shape-corner-medium)', marginBottom: '1rem', fontSize: '0.9rem' }}>
+                            <span>Welcome back. You were last working on <strong>{viewLabels[lastView] || lastView}</strong>.</span>
+                            <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                <button onClick={() => { navigateTo(lastView); setShowWelcomeBack(false); }} style={{ background: 'var(--md-sys-color-primary)', color: 'white', border: 'none', borderRadius: '6px', padding: '0.3rem 0.7rem', fontSize: '0.85rem', cursor: 'pointer' }}>Continue →</button>
+                                <button onClick={() => setShowWelcomeBack(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.85rem', color: '#666' }}>✕</button>
+                            </div>
+                        </div>
+                    )}
                     {/* 1. STATUS BOARD (HERO) */}
                     <div className="dashboard-hero">
                         <div className="hero-top-bar">
-                            <div className="day-counter">DAY {caseProfile.abductionDate ? Math.floor((new Date().getTime() - new Date(caseProfile.abductionDate).getTime()) / (1000 * 3600 * 24)) : 0} OF RECOVERY</div>
+                            <div>
+                                <div className="hero-child-name">{caseProfile.childName ? `Bring ${caseProfile.childName} Home` : 'Active Recovery'}</div>
+                                <div className="hero-case-route">{caseProfile.fromCountry && caseProfile.toCountry ? `${caseProfile.fromCountry} → ${caseProfile.toCountry}` : ''}{caseProfile.abductionDate ? ` · Day ${Math.floor((new Date().getTime() - new Date(caseProfile.abductionDate).getTime()) / (1000 * 3600 * 24))}` : ''}</div>
+                            </div>
                             <div className="status-pill active">ACTIVE CASE</div>
                         </div>
-                        
+
                         <QuickCopyCard profile={caseProfile} />
 
                         <div className="hero-content-grid">
-                             <CriticalTasksWidget items={items} onStart={handleStart} isGenerating={isGeneratingPlan} onBrainstorm={() => setView('taskBrainstormer')} />
-                             <IntelligenceBriefWidget profile={caseProfile} onUpdate={handleDossierUpdate} />
+                             <CriticalTasksWidget items={items} onStart={handleStart} isGenerating={isGeneratingPlan} onBrainstorm={() => navigateTo('taskBrainstormer')} onViewTasks={() => navigateTo('myChecklist')} />
+                             <IntelligenceBriefWidget profile={caseProfile} onUpdate={handleDossierUpdate} onAddTask={handleAddSuggestedTask} />
                         </div>
+                        <MomentumTracker items={items} />
                         <div style={{ marginTop: '2rem', borderTop: '1px solid #e1e2ec', paddingTop: '1.5rem' }}>
                              <SimilarCasesWidget from={caseProfile.fromCountry} to={caseProfile.toCountry} />
                         </div>
                     </div>
-                    
-                    <div className="tool-card highlight" onClick={() => setView('prevention')} style={{ marginBottom: '1.5rem', cursor: 'pointer' }}>
-                        <h3>🛡️ Worried About Abduction?</h3>
-                        <p>If you think your co-parent might try to take your child out of the country, get a step-by-step prevention checklist tailored to your country — right now. Download it as a PDF.</p>
-                    </div>
 
-                    <h3 className="section-title">Recovery Toolkit</h3>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <h3 className="section-title" style={{ margin: 0 }}>Recovery Toolkit</h3>
+                        <button onClick={() => navigateTo('howItWorks')} style={{ background: 'none', border: '1px solid var(--md-sys-color-outline)', color: 'var(--md-sys-color-on-surface-variant)', borderRadius: '8px', padding: '0.3rem 0.8rem', fontSize: '0.8rem', cursor: 'pointer' }}>❓ How This Works</button>
+                    </div>
 
                     {/* 2. TOOL GRID */}
                     <div className="tools-grid">
-                        <div className="tool-card" onClick={() => setView('myChecklist')}>
+                        <div className="tool-card" onClick={() => navigateTo('myChecklist')}>
                             <h3>📋 Action Plan</h3>
                             <p>Your master checklist of legal and operational tasks.</p>
                         </div>
-                        <div className="tool-card" onClick={() => setView('taskBrainstormer')}>
+                        <div className="tool-card" onClick={() => navigateTo('taskBrainstormer')}>
                             <h3>💡 Strategy Chat</h3>
                             <p>Brainstorm problems and turn worries into tasks.</p>
                         </div>
-                        <div className="tool-card" onClick={() => setView('caseJournal')}>
+                        <div className="tool-card" onClick={() => navigateTo('caseJournal')}>
                             <h3>🗂️ Evidence Locker</h3>
                             <p>Log calls, map documents to timeline, and export for court.</p>
                         </div>
-                        <div className="tool-card" onClick={() => setView('liveConversation')}>
+                        <div className="tool-card" onClick={() => navigateTo('liveConversation')}>
                             <h3>🎙️ Live Strategy Guide</h3>
                             <p>Voice-activated AI companion for crisis moments.</p>
                         </div>
-                        <div className="tool-card" onClick={() => setView('expenses')}>
+                        <div className="tool-card" onClick={() => navigateTo('expenses')}>
                             <h3>💰 Expense Tracker</h3>
                             <p>Log every dollar spent for future restitution claims.</p>
                         </div>
-                        <div className="tool-card" onClick={() => setView('correspondence')}>
+                        <div className="tool-card" onClick={() => navigateTo('correspondence')}>
                             <h3>📧 Comms HQ</h3>
                             <p>Draft professional emails to FBI, State Dept, and Lawyers.</p>
                         </div>
-                        <div className="tool-card" onClick={() => setView('documentVault')}>
+                        <div className="tool-card" onClick={() => navigateTo('documentVault')}>
                             <h3>🔒 Digital Vault</h3>
                             <p>Securely store and analyze court orders and reports.</p>
                         </div>
-                        <div className="tool-card" onClick={() => setView('knowledgeBase')}>
+                        <div className="tool-card" onClick={() => navigateTo('knowledgeBase')}>
                             <h3>📚 Knowledge Base</h3>
                             <p>Templates, guides, and legal resources.</p>
                         </div>
-                        <div className="tool-card" onClick={() => setView('campaignBuilder')}>
+                        <div className="tool-card" onClick={() => navigateTo('campaignBuilder')}>
                             <h3>📣 Campaign Site</h3>
                             <p>Build and host a public website to find your child.</p>
                         </div>
-                        <div className="tool-card" onClick={() => setView('contactList')}>
+                        <div className="tool-card" onClick={() => navigateTo('contactList')}>
                             <h3>📇 Contact List</h3>
                             <p>Build and manage your list of lawyers, agencies, and key contacts.</p>
+                        </div>
+                        <div className="tool-card" onClick={() => navigateTo('supportResources')}>
+                            <h3>🧠 Support & Mental Health</h3>
+                            <p>Find therapists, support groups, NGOs, and financial aid for your situation.</p>
                         </div>
                     </div>
                 </div>
             );
-            case 'myChecklist': return <MyChecklist items={items} setItems={setItems} onOpenBrainstorm={() => setView('taskBrainstormer')} />;
-            case 'taskBrainstormer': return <TaskBrainstormer profile={caseProfile} onAddTask={handleAddTask} />;
+            case 'myChecklist': return <MyChecklist items={items} setItems={setItems} onOpenBrainstorm={() => navigateTo('taskBrainstormer')} />;
+            case 'taskBrainstormer': return <TaskBrainstormer profile={caseProfile} onAddTask={handleAddTask} items={items} />;
             case 'caseJournal': return <CaseJournal />;
             case 'expenses': return <ExpensesTracker />;
             case 'liveConversation': return <LiveGuide />;
@@ -3163,64 +4109,127 @@ const App: React.FC = () => {
             case 'termsOfService': return <TermsOfService />;
             case 'dataManagement': return <DataManagement />;
             case 'contactList': return <ContactListBuilder profile={caseProfile} />;
-            case 'prevention': return <PreventionSteps setView={setView} />;
+            case 'prevention': return <PreventionSteps profile={caseProfile} onBack={() => navigateTo('dashboard')} />;
+            case 'howItWorks': return <HowItWorks onBack={() => navigateTo('dashboard')} />;
+            case 'supportResources': return <SupportResources profile={caseProfile} />;
             default: return <div>View Not Found</div>;
         }
+    };
+
+    // Sidebar rendering
+    const renderSidebar = () => {
+        let currentSection = '';
+        return navItems.map((item, i) => {
+            const sectionLabel = item.section && item.section !== currentSection ? item.section : null;
+            if (item.section) currentSection = item.section;
+            return (
+                <React.Fragment key={item.view}>
+                    {sectionLabel && <div className="sidebar-section-label">{sectionLabel}</div>}
+                    <button className={`sidebar-link${view === item.view ? ' active' : ''}`} onClick={() => navigateTo(item.view)}>
+                        <span className="sidebar-icon">{item.icon}</span>
+                        {item.label}
+                    </button>
+                </React.Fragment>
+            );
+        });
     };
 
     return (
         <div className="app-container">
             {showDisclaimer && <WelcomeDisclaimer onDismiss={dismissDisclaimer} />}
-            <header className="app-header">
-                <div className="header-branding" onClick={() => setView('dashboard')}>
+
+            {/* Mobile overlay */}
+            {sidebarOpen && <div className="sidebar-overlay open" onClick={() => setSidebarOpen(false)} />}
+
+            {/* Mobile top bar */}
+            <div className="mobile-topbar">
+                <button className="hamburger-btn" onClick={() => setSidebarOpen(true)}>☰</button>
+                <h1>Recovery Hub</h1>
+                <div style={{ width: '30px' }} />
+            </div>
+
+            {/* Sidebar Navigation */}
+            <aside className={`app-sidebar${sidebarOpen ? ' open' : ''}`}>
+                <div className="sidebar-brand" onClick={() => navigateTo('dashboard')}>
                     <h1>Recovery Hub</h1>
-                    <p className="subtitle">Case: {caseProfile.childName || 'New'}</p>
+                    <p className="sidebar-case">{caseProfile.childName ? `Case: ${caseProfile.childName}` : 'New Case'}</p>
                 </div>
-                <nav className="header-nav">
-                    <a onClick={() => setView('dashboard')}>Dashboard</a>
-                    <a onClick={() => setView('myChecklist')}>Tasks</a>
-                    <a onClick={() => setView('caseJournal')}>Evidence</a>
-                    <a onClick={() => setView('caseSettings')}>Settings</a>
+                <nav className="sidebar-nav">
+                    {renderSidebar()}
                 </nav>
-                <div className="auth-widget">
+                <div className="sidebar-footer">
                     {user ? (
-                        <div className="user-pill" onClick={() => handleSignOut()} title="Click to Sign Out">
-                            <img src={user.photoURL || ''} /> {user.displayName}
-                        </div>
+                        <button className="sidebar-auth-btn signed-in" onClick={() => handleSignOut()} title="Click to Sign Out">
+                            <img src={user.photoURL || ''} alt="" /> {user.displayName?.split(' ')[0] || 'Signed In'}
+                            <span className="cloud-dot" style={{ marginLeft: 'auto' }} />
+                        </button>
                     ) : (
-                        <button className="button-secondary small-auth-btn" onClick={handleSignIn}>Sign In / Save Case</button>
+                        <>
+                            <button className="sidebar-auth-btn sign-in" onClick={handleSignIn}>
+                                ☁️ Sign In to Save
+                            </button>
+                            {!nudgeDismissed && caseProfile.isProfileComplete && (
+                                <div className="sidebar-nudge">
+                                    <strong>💡 Your data is local only</strong>
+                                    Sign in with Google to back up your case across devices and never lose your work.
+                                </div>
+                            )}
+                        </>
                     )}
-                </div>
-            </header>
-
-            <main>
-                {caseProfile.isProfileComplete ? renderView() : <OnboardingWizard onComplete={(p) => { setCaseProfile(p); setView('dashboard'); }} />}
-            </main>
-
-            <footer className="app-footer">
-                <div className="footer-content">
-                    <div>
-                        <h3>A Note from the Creator</h3>
-                        <p>My name is Scott. I'm not an expert on child abduction, and I didn't go through and put together every right answer for every situation. In fact, one thing I learned is that almost every resource was wrong. I work in AI and build AI tools, so this seemed like a natural thing to build. AI isn't set up for this, but neither is the government, Google, or anything else. There is no perfect guide.</p>
-                        <p>I'm building this because I wished I had not been so alone when I started. As I'm writing this, I am still trying to recover my daughter. I'm not making this from a place of success, but as a work-in-progress because I know this is help people need. Read the Terms of Service. For context, you can learn about my situation at <a href="https://rescuecharlotte.org" target="_blank">rescuecharlotte.org</a>.</p>
+                    {'Notification' in window && (
+                        <button onClick={toggleNotifications} style={{ marginTop: '0.5rem', background: 'none', border: '1px solid rgba(200,216,232,0.2)', color: notificationsEnabled ? '#93c5fd' : 'rgba(200,216,232,0.5)', cursor: 'pointer', fontSize: '0.7rem', padding: '0.3rem 0.6rem', borderRadius: '6px', width: '100%', textAlign: 'center', transition: 'all 0.2s' }}>
+                            {notificationsEnabled ? '🔔 Reminders On' : '🔕 Enable Reminders'}
+                        </button>
+                    )}
+                    <div style={{ marginTop: '0.5rem', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                        <button onClick={() => navigateTo('dataManagement')} style={{ background: 'none', border: 'none', color: 'rgba(200,216,232,0.5)', cursor: 'pointer', fontSize: '0.7rem', padding: 0 }}>Data</button>
+                        <span style={{ color: 'rgba(200,216,232,0.3)' }}>·</span>
+                        <button onClick={() => navigateTo('termsOfService')} style={{ background: 'none', border: 'none', color: 'rgba(200,216,232,0.5)', cursor: 'pointer', fontSize: '0.7rem', padding: 0 }}>Terms</button>
                     </div>
-                    <div>
-                        <h3>Navigation</h3>
-                        <div className="footer-links">
-                           <a onClick={() => setView('dashboard')}>Home</a>
-                           <a onClick={() => setView('knowledgeBase')}>Knowledge Base</a>
-                           <a onClick={() => setView('dataManagement')}>Data Management</a>
-                           <a onClick={() => setView('termsOfService')}>Terms of Service</a>
+                </div>
+            </aside>
+
+            {/* Main Content Area */}
+            <div className="app-content-area">
+                <main>
+                    {/* Sign-in nudge banner at key data entry points */}
+                    {showSignInNudge && (
+                        <div className="signin-nudge-banner">
+                            <span>☁️</span>
+                            <span style={{ flex: 1 }}>Your work is saved locally. <strong>Sign in</strong> to back it up and access from any device.</span>
+                            <button onClick={handleSignIn}>Sign In</button>
+                            <button className="nudge-dismiss" onClick={dismissNudge}>✕</button>
+                        </div>
+                    )}
+                    {view === 'prevention' ? <PreventionSteps profile={caseProfile} onBack={() => navigateTo(caseProfile.isProfileComplete ? 'dashboard' : 'onboarding')} /> : caseProfile.isProfileComplete ? renderView() : <OnboardingWizard onComplete={(p) => { setCaseProfile(p); setView('dashboard'); }} onPreventionClick={() => setView('prevention')} />}
+                </main>
+
+                <footer className="app-footer">
+                    <div className="footer-content">
+                        <div>
+                            <h3>A Note from the Creator</h3>
+                            <p>My name is Scott. I'm not an expert on child abduction, and I didn't go through and put together every right answer for every situation. In fact, one thing I learned is that almost every resource was wrong. I work in AI and build AI tools, so this seemed like a natural thing to build.</p>
+                            <p>I'm building this because I wished I had not been so alone when I started. As I'm writing this, I am still trying to recover my daughter. For context, you can learn about my situation at <a href="https://rescuecharlotte.org" target="_blank">rescuecharlotte.org</a>.</p>
+                        </div>
+                        <div>
+                            <h3>Quick Links</h3>
+                            <div className="footer-links">
+                               <a onClick={() => navigateTo('dashboard')}>Home</a>
+                               <a onClick={() => navigateTo('howItWorks')}>How This Works</a>
+                               <a onClick={() => navigateTo('knowledgeBase')}>Knowledge Base</a>
+                               <a onClick={() => navigateTo('dataManagement')}>Data Management</a>
+                               <a onClick={() => navigateTo('termsOfService')}>Terms of Service</a>
+                            </div>
                         </div>
                     </div>
-                </div>
-                <div style={{ maxWidth: '1000px', margin: '0 auto', padding: '0 1.5rem' }}>
-                    <div className="disclaimer-block">
-                        <strong>LEGAL DISCLAIMER:</strong> This tool uses Artificial Intelligence to help organize information and draft documents. It is not a substitute for a qualified attorney. International family law is complex and fact-specific. Always consult with legal counsel in both the home and destination countries.
+                    <div style={{ maxWidth: '960px', margin: '0 auto' }}>
+                        <div className="disclaimer-block">
+                            <strong>LEGAL DISCLAIMER:</strong> This tool uses Artificial Intelligence to help organize information and draft documents. It is not a substitute for a qualified attorney. International family law is complex and fact-specific. Always consult with legal counsel in both the home and destination countries.
+                        </div>
+                        <p style={{ textAlign: 'center', fontSize: '0.7rem', color: 'rgba(160,174,192,0.5)', marginTop: '1.5rem' }}>Recovery Hub v0.5.0</p>
                     </div>
-                    <p style={{ textAlign: 'center', fontSize: '0.75rem', color: '#999', marginTop: '1.5rem' }}>Recovery Hub v0.2.0</p>
-                </div>
-            </footer>
+                </footer>
+            </div>
         </div>
     );
 };
