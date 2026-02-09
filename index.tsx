@@ -23,7 +23,7 @@ const db = getFirestore(app);
 const auth = getAuth(app);
 
 // --- TYPES ---
-type View = 'onboarding' | 'dashboard' | 'liveConversation' | 'knowledgeBase' | 'termsOfService' | 'dataManagement' | 'myChecklist' | 'caseJournal' | 'expenses' | 'correspondence' | 'caseSettings' | 'documentVault' | 'campaignBuilder' | 'taskBrainstormer';
+type View = 'onboarding' | 'dashboard' | 'liveConversation' | 'knowledgeBase' | 'termsOfService' | 'dataManagement' | 'myChecklist' | 'caseJournal' | 'expenses' | 'correspondence' | 'caseSettings' | 'documentVault' | 'campaignBuilder' | 'taskBrainstormer' | 'contactList' | 'prevention';
 type CustodyStatus = 'no-order' | 'sole-custody-me-local' | 'joint-custody-local' | 'sole-custody-them-local' | 'sole-custody-me-foreign' | 'joint-custody-foreign' | 'sole-custody-them-foreign' | 'other';
 type ParentRole = 'mother' | 'father' | 'legal-guardian' | 'other';
 
@@ -126,6 +126,22 @@ interface ChatMessage {
     role: 'user' | 'ai';
     text: string;
     suggestedTasks?: ActionItem[];
+}
+
+interface ContactEntry {
+    id: string;
+    name: string;
+    role: string;
+    email?: string;
+    phone?: string;
+    notes?: string;
+}
+
+interface ChecklistItem {
+    id: string;
+    text: string;
+    completed: boolean;
+    type: 'task' | 'heading' | 'paragraph';
 }
 
 // --- RAG HELPER ---
@@ -323,10 +339,10 @@ const TaskAssistantModal: React.FC<{ task: ActionItem, onClose: () => void }> = 
             `;
 
             const result = await ai.models.generateContent({
-                model: "gemini-2.5-flash",
+                model: "gemini-2.5-pro",
                 contents: prompt
             });
-            
+
             const responseText = result.text || "I couldn't generate a response. Please try again.";
             setMessages(prev => [...prev, { role: 'ai', text: responseText }]);
         } catch (e) {
@@ -448,7 +464,7 @@ const IntelligenceBriefWidget: React.FC<{ profile: CaseProfile, onUpdate: (d: Do
             `;
 
             const result = await ai.models.generateContent({
-                model: "gemini-2.5-flash",
+                model: "gemini-2.5-pro",
                 contents: prompt,
                 config: {
                     responseMimeType: "application/json",
@@ -667,7 +683,7 @@ const TaskBrainstormer: React.FC<{ profile: CaseProfile, onAddTask: (task: Actio
             `;
 
             const result = await ai.models.generateContent({
-                model: "gemini-2.5-flash",
+                model: "gemini-2.5-pro",
                 contents: prompt,
                 config: {
                     responseMimeType: "application/json",
@@ -774,6 +790,12 @@ const MyChecklist: React.FC<{ items: ActionItem[]; setItems: React.Dispatch<Reac
         setItems(prev => prev.map(i => i.id === id ? { ...i, completed: !i.completed } : i));
     };
 
+    const deleteItem = (id: string) => {
+        if (confirm("Are you sure you want to delete this task? This cannot be undone.")) {
+            setItems(prev => prev.filter(i => i.id !== id));
+        }
+    };
+
     const exportTasksPDF = () => {
         const doc = new jsPDF();
         
@@ -860,13 +882,14 @@ const MyChecklist: React.FC<{ items: ActionItem[]; setItems: React.Dispatch<Reac
                         <div className="action-item-header">
                             <div style={{ display: 'flex', alignItems: 'center' }}>
                                 <input type="checkbox" className="action-item-checkbox" checked={item.completed} onChange={() => toggleItem(item.id)} />
-                                <strong>{item.task}</strong>
+                                <strong className="action-item-task-text">{item.task}</strong>
                             </div>
                             <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
                                 <button className="button-ai" style={{ fontSize: '0.7rem', padding: '2px 8px' }} onClick={() => setAssistingTask(item)}>
                                     🤖 AI Guide
                                 </button>
                                 <span className={`action-item-priority ${item.priority.toLowerCase()}`}>{item.priority}</span>
+                                <button className="action-item-delete" onClick={() => deleteItem(item.id)} title="Delete Task">🗑️</button>
                             </div>
                         </div>
                         <p style={{ margin: '0.5rem 0 0 2rem', fontSize: '0.9rem' }}>{item.description}</p>
@@ -922,7 +945,7 @@ const DocumentVault: React.FC = () => {
             `;
 
             const result = await ai.models.generateContent({
-                model: "gemini-2.5-flash",
+                model: "gemini-2.5-pro",
                 contents: [
                     { inlineData: { mimeType: file.type, data: base64 } },
                     { text: prompt }
@@ -1078,7 +1101,7 @@ const CaseJournal: React.FC = () => {
                  `;
                  
                  const result = await ai.models.generateContent({
-                    model: "gemini-2.5-flash",
+                    model: "gemini-2.5-pro",
                     contents: [
                         { inlineData: { mimeType: file.type, data: base64 } },
                         { text: prompt }
@@ -1177,7 +1200,7 @@ const CaseJournal: React.FC = () => {
         setIsPolishing(true);
         try {
             const result = await ai.models.generateContent({
-                model: "gemini-2.5-flash",
+                model: "gemini-2.5-pro",
                 contents: `Rewrite this log entry to be objective, factual, and professional for a legal affidavit. Remove emotional language. Context: ${newLog.description}`
             });
             if (result.text) {
@@ -1516,14 +1539,21 @@ const ExpensesTracker: React.FC = () => {
     );
 };
 const LiveGuide: React.FC = () => {
-    // ... (Same as before)
     const [connected, setConnected] = useState(false);
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const [logs, setLogs] = useState<string[]>([]);
-    
+
     const audioContextRef = useRef<AudioContext | null>(null);
     const analyserRef = useRef<AnalyserNode | null>(null);
     const websocketRef = useRef<WebSocket | null>(null);
+
+    // Cleanup WebSocket and AudioContext on unmount
+    useEffect(() => {
+        return () => {
+            websocketRef.current?.close();
+            audioContextRef.current?.close();
+        };
+    }, []);
 
     const connect = async () => {
         try {
@@ -1637,8 +1667,16 @@ const LiveGuide: React.FC = () => {
     );
 };
 
+const EMAIL_TEMPLATES = [
+    { id: 'custom', label: 'Custom (Blank)', recipient: '', topic: '', tone: 'Firm', instructions: '' },
+    { id: 'police-followup', label: 'Police Report Follow-Up', recipient: 'Investigating Officer / Police Department', topic: 'Follow-up on Missing Child Report', tone: 'Firm & Legal', instructions: 'Request status update on the police report. Ask if the child has been entered into NCIC and Interpol databases. Request the case number if not already provided.' },
+    { id: 'central-authority', label: 'State Dept / Central Authority', recipient: 'Office of Children\'s Issues / Central Authority', topic: 'Hague Convention Application Status', tone: 'Firm & Legal', instructions: 'Inquire about the status of a Hague Convention return application. Reference any case numbers. Ask about timeline and next steps.' },
+    { id: 'lawyer', label: 'Lawyer Engagement', recipient: 'Family Law Attorney', topic: 'Engagement for International Child Abduction Case', tone: 'Neutral Update', instructions: 'Initial outreach to a lawyer specializing in international family law. Briefly explain the situation and request a consultation. Ask about their experience with Hague Convention cases.' },
+    { id: 'embassy', label: 'Embassy / Consulate Inquiry', recipient: 'Embassy / Consulate of [Country]', topic: 'Welfare Check / Consular Assistance for Abducted Child', tone: 'Pleading & Urgent', instructions: 'Request a welfare and whereabouts check on the child. Ask about consular notification and what assistance they can provide. Reference any passport or citizenship information.' },
+    { id: 'records', label: 'School / Medical Records', recipient: 'School Administrator / Medical Provider', topic: 'Request for Records Transfer / Information Hold', tone: 'Polite Follow-up', instructions: 'Request that no records be released or transferred without your written consent. Ask for copies of any transfer requests that have been received. Provide custody documentation context.' }
+];
+
 const CorrespondenceHelper: React.FC<{ profile: CaseProfile }> = ({ profile }) => {
-    // ... (Same as before)
     const [draft, setDraft] = useState('');
     const [recipient, setRecipient] = useState('');
     const [topic, setTopic] = useState('');
@@ -1646,6 +1684,19 @@ const CorrespondenceHelper: React.FC<{ profile: CaseProfile }> = ({ profile }) =
     const [includeOverview, setIncludeOverview] = useState(true);
     const [tone, setTone] = useState('Firm');
     const [generating, setGenerating] = useState(false);
+    const [selectedTemplate, setSelectedTemplate] = useState('custom');
+
+    const applyTemplate = (templateId: string) => {
+        const template = EMAIL_TEMPLATES.find(t => t.id === templateId);
+        if (template) {
+            setSelectedTemplate(templateId);
+            if (templateId !== 'custom') {
+                setRecipient(template.recipient);
+                setTopic(template.topic);
+                setTone(template.tone);
+            }
+        }
+    };
 
     const generateDraft = async () => {
         setGenerating(true);
@@ -1673,10 +1724,11 @@ const CorrespondenceHelper: React.FC<{ profile: CaseProfile }> = ({ profile }) =
             - Ensure the subject line includes Case IDs if available.
             - USE THE REFERENCE DOCUMENTS PROVIDED (if any) to add specific dates/facts where relevant.
             - Keep it professional, clear, and action-oriented.
+            ${selectedTemplate !== 'custom' ? `\n            TEMPLATE-SPECIFIC INSTRUCTIONS:\n            ${EMAIL_TEMPLATES.find(t => t.id === selectedTemplate)?.instructions || ''}` : ''}
             `;
             
             const result = await ai.models.generateContent({
-                model: "gemini-2.5-flash",
+                model: "gemini-2.5-pro",
                 contents: prompt
             });
             setDraft((result.text as string) || '');
@@ -1690,8 +1742,16 @@ const CorrespondenceHelper: React.FC<{ profile: CaseProfile }> = ({ profile }) =
     return (
         <div className="tool-card" style={{ cursor: 'default' }}>
             <h2>Comms HQ</h2>
-            <p>Draft professional emails to lawyers, police, and government agencies.</p>
-            
+            <p>Draft professional emails to lawyers, police, and government agencies. Select a template or start from scratch.</p>
+
+            <div className="template-selector">
+                {EMAIL_TEMPLATES.map(t => (
+                    <button key={t.id} className={`template-chip ${selectedTemplate === t.id ? 'active' : ''}`} onClick={() => applyTemplate(t.id)}>
+                        {t.label}
+                    </button>
+                ))}
+            </div>
+
             <div className="form-grid">
                 <div style={{ gridColumn: '1 / -1' }}>
                      <label>To Who? (Recipient)</label>
@@ -1934,7 +1994,7 @@ const CampaignSiteBuilder: React.FC<{ profile: CaseProfile }> = ({ profile }) =>
              - Keep it under 300 words.
              `;
              const result = await ai.models.generateContent({
-                 model: "gemini-2.5-flash",
+                 model: "gemini-2.5-pro",
                  contents: prompt
              });
              if (result.text) setStory(result.text);
@@ -2269,7 +2329,7 @@ const OnboardingWizard: React.FC<{ onComplete: (p: CaseProfile) => void }> = ({ 
                  `;
                  
                  const result = await ai.models.generateContent({
-                    model: "gemini-2.5-flash",
+                    model: "gemini-2.5-pro",
                     contents: [
                         { inlineData: { mimeType: file.type, data: base64 } },
                         { text: prompt }
@@ -2428,6 +2488,388 @@ const OnboardingWizard: React.FC<{ onComplete: (p: CaseProfile) => void }> = ({ 
 };
 
 
+// --- PREVENTION STEPS TOOL ---
+
+const GeminiResponseRenderer: React.FC<{ items: ChecklistItem[], onToggleItem: (id: string) => void }> = ({ items, onToggleItem }) => {
+    const renderLineContent = (text: string) => {
+        return text.split(/(\*\*.*?\*\*)/g).map((part, index) => {
+            if (part.startsWith('**') && part.endsWith('**')) {
+                return <strong key={index}>{part.slice(2, -2)}</strong>;
+            }
+            return part;
+        });
+    };
+
+    return (
+        <div className="gemini-response-checklist">
+            {items.map(item => {
+                switch (item.type) {
+                    case 'heading':
+                        return <h3 key={item.id} className="checklist-heading">{renderLineContent(item.text)}</h3>;
+                    case 'task':
+                        return (
+                            <div key={item.id} className={`checklist-item ${item.completed ? 'completed' : ''}`}>
+                                <label className="checklist-item-label">
+                                    <input type="checkbox" className="checklist-item-checkbox" checked={item.completed} onChange={() => onToggleItem(item.id)} />
+                                    <span>{renderLineContent(item.text)}</span>
+                                </label>
+                            </div>
+                        );
+                    case 'paragraph':
+                    default:
+                        return <p key={item.id} className="checklist-paragraph">{renderLineContent(item.text)}</p>;
+                }
+            })}
+        </div>
+    );
+};
+
+const PreventionSteps: React.FC<{ setView: (view: View) => void }> = ({ setView }) => {
+    const [country, setCountry] = useState('');
+    const [items, setItems] = useState<ChecklistItem[]>([]);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState('');
+    const responseRef = useRef<HTMLDivElement>(null);
+
+    const parseResponseToItems = (text: string): ChecklistItem[] => {
+        const lines = text.split('\n');
+        const parsed: ChecklistItem[] = [];
+        lines.forEach(line => {
+            const t = line.trim();
+            if (t.startsWith('## ')) {
+                parsed.push({ id: crypto.randomUUID(), text: t.substring(3), completed: false, type: 'heading' });
+            } else if (t.startsWith('* ') || t.startsWith('- ')) {
+                parsed.push({ id: crypto.randomUUID(), text: t.substring(2), completed: false, type: 'task' });
+            } else if (t.length > 0) {
+                const last = parsed[parsed.length - 1];
+                if (last && last.type === 'paragraph') {
+                    last.text += ` ${t}`;
+                } else {
+                    parsed.push({ id: crypto.randomUUID(), text: t, completed: false, type: 'paragraph' });
+                }
+            }
+        });
+        return parsed;
+    };
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setLoading(true);
+        setError('');
+        setItems([]);
+        try {
+            const prompt = `A parent is worried their co-parent is going to abduct their child internationally from their current country of residence, which is ${country}.
+Generate a clear, actionable list of preventative steps they can take.
+CRITICAL INSTRUCTIONS:
+1. **Country-Specific Programs:** Prioritize official, country-specific programs. For the U.S., this MUST include the "Children's Passport Issuance Alert Program (CPIAP)". For other countries, find the equivalent passport alert or border control program.
+2. **Legal Actions:** Emphasize the importance of obtaining a court order that explicitly prohibits the child from leaving the country without permission from the court or both parents.
+3. **Practical Steps:** Include practical advice like securing the child's passport, notifying schools, and documenting threats.
+4. **Provide URLs:** Wherever possible, provide official government URLs for the programs and resources you mention.
+Format the response as a clear, easy-to-follow list. Use markdown for formatting (e.g., ## for headings, * for list items, ** for bold).`;
+
+            const result = await ai.models.generateContent({
+                model: 'gemini-2.5-pro',
+                contents: prompt,
+            });
+            setItems(parseResponseToItems(result.text || ''));
+        } catch (e: any) {
+            setError(`Failed to generate prevention steps: ${e.message}`);
+            console.error(e);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleToggleItem = (id: string) => {
+        setItems(prev => prev.map(item => item.id === id ? { ...item, completed: !item.completed } : item));
+    };
+
+    const handleDownloadPdf = async () => {
+        const element = responseRef.current;
+        if (!element) return;
+        const btn = element.querySelector('.button-download') as HTMLElement | null;
+        if (btn) btn.style.display = 'none';
+        try {
+            const canvas = await html2canvas(element, { scale: 2, backgroundColor: '#f8f9fa' });
+            if (btn) btn.style.display = '';
+            const imgData = canvas.toDataURL('image/png');
+            const pdf = new jsPDF({ orientation: 'p', unit: 'px', format: [canvas.width, canvas.height] });
+            pdf.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height);
+            pdf.save('Recommended-Prevention-Plan.pdf');
+        } catch (err) {
+            if (btn) btn.style.display = '';
+            console.error('PDF generation failed', err);
+            setError('PDF could not be created. Try your browser\'s print function (Ctrl/Cmd + P).');
+        }
+    };
+
+    return (
+        <div className="tool-card" style={{ cursor: 'default' }}>
+            <button className="button-secondary" onClick={() => setView('dashboard')} style={{ marginBottom: '1rem' }}>&larr; Back to Dashboard</button>
+            <h2>Prevention Steps</h2>
+            <p style={{ color: '#555', marginBottom: '1.5rem' }}>Worried your co-parent may try to take your child out of the country? Enter your country below and we'll generate a specific, actionable prevention checklist you can start on right now.</p>
+            <form onSubmit={handleSubmit} className="form-grid">
+                <div className="full-width">
+                    <label>Your Current Country of Residence</label>
+                    <input type="text" value={country} onChange={e => setCountry(e.target.value)} placeholder="e.g., United States, United Kingdom, Japan" required />
+                </div>
+                <div className="full-width">
+                    <button type="submit" className="button-primary" disabled={loading} style={{ width: '100%' }}>
+                        {loading ? 'Generating Prevention Plan...' : 'Get Prevention Steps'}
+                    </button>
+                </div>
+            </form>
+
+            {loading && <div className="prevention-spinner"></div>}
+            {error && <p style={{ color: 'var(--md-sys-color-error)', marginTop: '1rem' }}>{error}</p>}
+
+            {items.length > 0 && (
+                <div className="response-content" ref={responseRef}>
+                    <div className="response-header">
+                        <h3>Recommended Prevention Plan</h3>
+                        <button className="button-download" onClick={handleDownloadPdf}>Download PDF</button>
+                    </div>
+                    <GeminiResponseRenderer items={items} onToggleItem={handleToggleItem} />
+                    <div className="disclaimer-block" style={{ marginTop: '1.5rem' }}>
+                        <strong>Important Disclaimer:</strong> This is AI-generated guidance for informational purposes only. It is not a substitute for legal advice. Laws, treaties, and procedures differ by country and situation. Always verify with qualified legal counsel and official government authorities before taking action.
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
+// --- CONTACT LIST BUILDER ---
+const ContactListBuilder: React.FC<{ profile: CaseProfile }> = ({ profile }) => {
+    const [contacts, setContacts] = useState<ContactEntry[]>([]);
+    const [newContact, setNewContact] = useState<Partial<ContactEntry>>({ role: '' });
+    const [suggesting, setSuggesting] = useState(false);
+
+    useEffect(() => {
+        const saved = localStorage.getItem('caseContacts');
+        if (saved) setContacts(JSON.parse(saved));
+        if (auth.currentUser) {
+            getDocs(query(collection(db, `users/${auth.currentUser.uid}/contacts`))).then(snap => {
+                if (!snap.empty) {
+                    const cloudContacts = snap.docs.map(d => d.data() as ContactEntry);
+                    if (cloudContacts.length > 0) setContacts(cloudContacts);
+                }
+            }).catch(() => {});
+        }
+    }, []);
+
+    useEffect(() => {
+        localStorage.setItem('caseContacts', JSON.stringify(contacts));
+        if (auth.currentUser && contacts.length > 0) {
+            const batch = writeBatch(db);
+            contacts.forEach(c => {
+                const ref = doc(db, `users/${auth.currentUser!.uid}/contacts`, c.id);
+                batch.set(ref, c);
+            });
+            batch.commit().catch(e => console.error("Contact sync failed", e));
+        }
+    }, [contacts]);
+
+    const addContact = () => {
+        if (!newContact.name) return;
+        const entry: ContactEntry = {
+            id: Date.now().toString(),
+            name: newContact.name,
+            role: newContact.role || '',
+            email: newContact.email || '',
+            phone: newContact.phone || '',
+            notes: newContact.notes || ''
+        };
+        setContacts(prev => [entry, ...prev]);
+        setNewContact({ role: '' });
+    };
+
+    const deleteContact = (id: string) => {
+        if (confirm("Delete this contact?")) {
+            setContacts(prev => prev.filter(c => c.id !== id));
+        }
+    };
+
+    const copyText = (text: string, label: string) => {
+        if (!text) return;
+        navigator.clipboard.writeText(text);
+        alert(`Copied ${label} to clipboard`);
+    };
+
+    const suggestContacts = async () => {
+        setSuggesting(true);
+        try {
+            const prompt = `
+            Suggest 5-8 key contacts/agencies a parent should reach out to for an international child abduction case.
+            Child taken from: ${profile.fromCountry}
+            Child taken to: ${profile.toCountry}
+
+            For EACH contact, provide:
+            - "name": Official name of agency/organization
+            - "role": What they do (e.g., "Central Authority for Hague Convention")
+            - "email": Official contact email if commonly known (or leave blank)
+            - "phone": Official phone if commonly known (or leave blank)
+            - "notes": Why this contact is important and what to ask them
+
+            Include: Local police, FBI (if US), State Department / Ministry of Foreign Affairs, Central Authority in both countries, NCMEC/ICMEC, relevant embassy/consulate, a specialized family law organization.
+            Return JSON array.
+            `;
+
+            const result = await ai.models.generateContent({
+                model: "gemini-2.5-pro",
+                contents: prompt,
+                config: {
+                    responseMimeType: "application/json",
+                    responseSchema: {
+                        type: Type.ARRAY,
+                        items: {
+                            type: Type.OBJECT,
+                            properties: {
+                                name: { type: Type.STRING },
+                                role: { type: Type.STRING },
+                                email: { type: Type.STRING },
+                                phone: { type: Type.STRING },
+                                notes: { type: Type.STRING }
+                            },
+                            required: ["name", "role", "notes"]
+                        }
+                    }
+                }
+            });
+
+            const text = result.text;
+            if (text) {
+                const suggested = JSON.parse(text);
+                const newContacts: ContactEntry[] = suggested.map((s: any, i: number) => ({
+                    id: Date.now().toString() + i,
+                    name: s.name,
+                    role: s.role,
+                    email: s.email || '',
+                    phone: s.phone || '',
+                    notes: s.notes || ''
+                }));
+                setContacts(prev => [...newContacts, ...prev]);
+            }
+        } catch (e) {
+            console.error(e);
+            alert("Failed to suggest contacts. Please try again.");
+        } finally {
+            setSuggesting(false);
+        }
+    };
+
+    return (
+        <div className="tool-card" style={{ cursor: 'default' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <h2>Contact List</h2>
+                <button className="button-ai" onClick={suggestContacts} disabled={suggesting}>
+                    {suggesting ? 'Finding Contacts...' : '🤖 AI Suggest Contacts'}
+                </button>
+            </div>
+            <p style={{ fontSize: '0.9rem', color: '#666' }}>Build your team of contacts - lawyers, agencies, police, and advocates. AI can suggest key contacts based on your case countries.</p>
+
+            <div className="form-grid" style={{ backgroundColor: '#f8f9fa', padding: '1rem', borderRadius: '8px', marginBottom: '1.5rem' }}>
+                <input type="text" placeholder="Name / Agency" value={newContact.name || ''} onChange={e => setNewContact({...newContact, name: e.target.value})} />
+                <input type="text" placeholder="Role (e.g., FBI Agent, Lawyer)" value={newContact.role || ''} onChange={e => setNewContact({...newContact, role: e.target.value})} />
+                <input type="email" placeholder="Email" value={newContact.email || ''} onChange={e => setNewContact({...newContact, email: e.target.value})} />
+                <input type="tel" placeholder="Phone" value={newContact.phone || ''} onChange={e => setNewContact({...newContact, phone: e.target.value})} />
+                <input type="text" placeholder="Notes (optional)" value={newContact.notes || ''} onChange={e => setNewContact({...newContact, notes: e.target.value})} className="full-width" />
+                <button className="button-primary full-width" onClick={addContact}>Add Contact</button>
+            </div>
+
+            <div>
+                {contacts.length === 0 && <p style={{ textAlign: 'center', color: '#666' }}>No contacts yet. Add manually or use AI Suggest.</p>}
+                {contacts.map(c => (
+                    <div key={c.id} className="contact-card">
+                        <div className="contact-card-info">
+                            <div className="contact-card-name">{c.name}</div>
+                            {c.role && <div className="contact-card-role">{c.role}</div>}
+                            <div className="contact-card-details">
+                                {c.email && <button onClick={() => copyText(c.email!, 'email')}>📧 {c.email}</button>}
+                                {c.phone && <button onClick={() => copyText(c.phone!, 'phone')}>📞 {c.phone}</button>}
+                            </div>
+                            {c.notes && <div style={{ fontSize: '0.85rem', color: '#666', marginTop: '0.5rem' }}>{c.notes}</div>}
+                        </div>
+                        <div className="contact-card-actions">
+                            <button onClick={() => deleteContact(c.id)} title="Delete Contact">🗑️</button>
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+};
+
+// --- ERROR BOUNDARY ---
+class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean }> {
+    constructor(props: { children: React.ReactNode }) {
+        super(props);
+        this.state = { hasError: false };
+    }
+
+    static getDerivedStateFromError() {
+        return { hasError: true };
+    }
+
+    componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+        console.error("ErrorBoundary caught:", error, errorInfo);
+    }
+
+    render() {
+        if (this.state.hasError) {
+            return (
+                <div className="error-boundary">
+                    <h2>Something went wrong</h2>
+                    <p>The app encountered an unexpected error. Your data is safe - it's stored locally on your device and in the cloud if you're signed in.</p>
+                    <button className="button-primary" onClick={() => window.location.reload()}>Refresh Page</button>
+                </div>
+            );
+        }
+        return this.props.children;
+    }
+}
+
+// --- WELCOME DISCLAIMER POPUP ---
+
+const WelcomeDisclaimer: React.FC<{ onDismiss: () => void }> = ({ onDismiss }) => {
+    return (
+        <div className="welcome-overlay">
+            <div className="welcome-modal">
+                <h2>Hey — quick heads up before you dive in.</h2>
+                <p>This is an <strong>MVP</strong> (minimum viable product). That means it works, and some people have found it genuinely helpful, but it's still being built. Things may break. If they do, refresh and try again — your data won't be lost.</p>
+
+                <div className="welcome-section">
+                    <h3>Your data stays on YOUR device</h3>
+                    <p>Right now, documents and case files are stored <strong>locally in your browser</strong> on your machine. Nothing sensitive goes to a database. That means there's essentially no security risk — but it also means if you switch devices or clear your browser data, you'll lose what you've saved. Use the same browser on the same machine and you're good.</p>
+                    <p>If I see this tool helping enough people, I'll build out proper cloud storage with encryption. For now, this keeps things simple and safe.</p>
+                </div>
+
+                <div className="welcome-section">
+                    <h3>What this thing actually does</h3>
+                    <ul>
+                        <li><strong>Prevention checklist</strong> — worried they might take your kid? Get country-specific steps right now</li>
+                        <li><strong>Builds you a personalized action plan</strong> based on your situation</li>
+                        <li><strong>Drafts professional emails</strong> to lawyers, police, embassies, and government agencies</li>
+                        <li><strong>Tracks your evidence</strong> with a timeline and document vault</li>
+                        <li><strong>Creates a public campaign page</strong> to help find your child</li>
+                        <li><strong>Logs expenses</strong> for future restitution claims</li>
+                        <li><strong>AI strategy chat</strong> that actually knows about Hague Convention cases</li>
+                    </ul>
+                </div>
+
+                <div className="welcome-section">
+                    <h3>The more you put in, the more useful it gets</h3>
+                    <p>Seriously — by a mile. The AI uses everything you enter to give you better, more specific guidance. Fill out your case profile, upload documents, log what's happened. The more context it has, the better it can help.</p>
+                </div>
+
+                <p style={{ fontSize: '0.85rem', color: '#666', marginTop: '1rem' }}>Built by a parent going through this. Not from a place of success — from a place of trying. <a href="https://rescuecharlotte.org" target="_blank" rel="noopener noreferrer" style={{ color: '#005ac1' }}>rescuecharlotte.org</a></p>
+
+                <button className="button-primary" onClick={onDismiss} style={{ marginTop: '1.5rem', width: '100%', padding: '0.9rem', fontSize: '1.05rem' }}>Got it — let me in</button>
+            </div>
+        </div>
+    );
+};
+
 // --- MAIN APP COMPONENT ---
 
 const App: React.FC = () => {
@@ -2438,6 +2880,12 @@ const App: React.FC = () => {
     const [items, setItems] = useState<ActionItem[]>([]);
     const [user, setUser] = useState<User | null>(null);
     const [isGeneratingPlan, setIsGeneratingPlan] = useState(false);
+    const [showDisclaimer, setShowDisclaimer] = useState(() => !localStorage.getItem('recoveryHubDisclaimerSeen'));
+
+    const dismissDisclaimer = () => {
+        localStorage.setItem('recoveryHubDisclaimerSeen', 'true');
+        setShowDisclaimer(false);
+    };
 
     // --- CLOUD SYNC MANAGER ---
     const syncDataToCloud = async (profile: CaseProfile, tasks: ActionItem[]) => {
@@ -2562,7 +3010,7 @@ const App: React.FC = () => {
             `;
 
             const result = await ai.models.generateContent({
-                model: "gemini-2.5-flash",
+                model: "gemini-2.5-pro",
                 contents: prompt,
                 config: {
                     responseMimeType: "application/json",
@@ -2650,8 +3098,13 @@ const App: React.FC = () => {
                         </div>
                     </div>
                     
+                    <div className="tool-card highlight" onClick={() => setView('prevention')} style={{ marginBottom: '1.5rem', cursor: 'pointer' }}>
+                        <h3>🛡️ Worried About Abduction?</h3>
+                        <p>If you think your co-parent might try to take your child out of the country, get a step-by-step prevention checklist tailored to your country — right now. Download it as a PDF.</p>
+                    </div>
+
                     <h3 className="section-title">Recovery Toolkit</h3>
-                    
+
                     {/* 2. TOOL GRID */}
                     <div className="tools-grid">
                         <div className="tool-card" onClick={() => setView('myChecklist')}>
@@ -2690,6 +3143,10 @@ const App: React.FC = () => {
                             <h3>📣 Campaign Site</h3>
                             <p>Build and host a public website to find your child.</p>
                         </div>
+                        <div className="tool-card" onClick={() => setView('contactList')}>
+                            <h3>📇 Contact List</h3>
+                            <p>Build and manage your list of lawyers, agencies, and key contacts.</p>
+                        </div>
                     </div>
                 </div>
             );
@@ -2705,12 +3162,15 @@ const App: React.FC = () => {
             case 'caseSettings': return <CaseSettings profile={caseProfile} setProfile={setCaseProfile} />;
             case 'termsOfService': return <TermsOfService />;
             case 'dataManagement': return <DataManagement />;
+            case 'contactList': return <ContactListBuilder profile={caseProfile} />;
+            case 'prevention': return <PreventionSteps setView={setView} />;
             default: return <div>View Not Found</div>;
         }
     };
 
     return (
         <div className="app-container">
+            {showDisclaimer && <WelcomeDisclaimer onDismiss={dismissDisclaimer} />}
             <header className="app-header">
                 <div className="header-branding" onClick={() => setView('dashboard')}>
                     <h1>Recovery Hub</h1>
@@ -2758,6 +3218,7 @@ const App: React.FC = () => {
                     <div className="disclaimer-block">
                         <strong>LEGAL DISCLAIMER:</strong> This tool uses Artificial Intelligence to help organize information and draft documents. It is not a substitute for a qualified attorney. International family law is complex and fact-specific. Always consult with legal counsel in both the home and destination countries.
                     </div>
+                    <p style={{ textAlign: 'center', fontSize: '0.75rem', color: '#999', marginTop: '1.5rem' }}>Recovery Hub v0.2.0</p>
                 </div>
             </footer>
         </div>
@@ -2766,4 +3227,4 @@ const App: React.FC = () => {
 
 const container = document.getElementById('root');
 const root = createRoot(container!);
-root.render(<App />);
+root.render(<ErrorBoundary><App /></ErrorBoundary>);
