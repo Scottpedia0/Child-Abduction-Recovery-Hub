@@ -410,19 +410,19 @@ const QuickCopyCard: React.FC<{ profile: CaseProfile }> = ({ profile }) => {
 
     return (
         <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '1.5rem' }}>
-            <button className="button-secondary" style={{ fontSize: '0.8rem', padding: '0.25rem 0.75rem', backgroundColor: 'white', border: '1px solid #dbe2f9' }} onClick={() => copyToClipboard(profile.childName, "Child Name")}>
+            <button className="button-secondary" style={{ fontSize: '0.8rem', padding: '0.25rem 0.75rem', backgroundColor: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', color: '#e2ecf5' }} onClick={() => copyToClipboard(profile.childName, "Child Name")}>
                 Child: <strong>{profile.childName}</strong> 📋
             </button>
             {profile.childDOB && (
-                <button className="button-secondary" style={{ fontSize: '0.8rem', padding: '0.25rem 0.75rem', backgroundColor: 'white', border: '1px solid #dbe2f9' }} onClick={() => copyToClipboard(profile.childDOB!, "DOB")}>
+                <button className="button-secondary" style={{ fontSize: '0.8rem', padding: '0.25rem 0.75rem', backgroundColor: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', color: '#e2ecf5' }} onClick={() => copyToClipboard(profile.childDOB!, "DOB")}>
                     DOB: <strong>{profile.childDOB}</strong> 📋
                 </button>
             )}
-            <button className="button-secondary" style={{ fontSize: '0.8rem', padding: '0.25rem 0.75rem', backgroundColor: 'white', border: '1px solid #dbe2f9' }} onClick={() => copyToClipboard(profile.abductionDate, "Abduction Date")}>
+            <button className="button-secondary" style={{ fontSize: '0.8rem', padding: '0.25rem 0.75rem', backgroundColor: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', color: '#e2ecf5' }} onClick={() => copyToClipboard(profile.abductionDate, "Abduction Date")}>
                 Taken: <strong>{profile.abductionDate}</strong> 📋
             </button>
             {Object.entries(profile.caseNumbers || {}).map(([key, val]) => (
-                 <button key={key} className="button-secondary" style={{ fontSize: '0.8rem', padding: '0.25rem 0.75rem', backgroundColor: 'white', border: '1px solid #1e3a5f', color: '#1e3a5f' }} onClick={() => copyToClipboard(val, key)}>
+                 <button key={key} className="button-secondary" style={{ fontSize: '0.8rem', padding: '0.25rem 0.75rem', backgroundColor: 'rgba(255,255,255,0.15)', border: '1px solid rgba(147,197,253,0.4)', color: '#93c5fd' }} onClick={() => copyToClipboard(val, key)}>
                     {key}: <strong>{val}</strong> 📋
                 </button>
             ))}
@@ -535,9 +535,9 @@ const IntelligenceBriefWidget: React.FC<{ profile: CaseProfile, onUpdate: (d: Do
             
             {history.length > 1 && (
                 <div style={{display: 'flex', justifyContent: 'space-between', marginBottom: '1rem', alignItems: 'center'}}>
-                    <button onClick={() => setViewIndex(Math.min(viewIndex + 1, history.length - 1))} disabled={viewIndex >= history.length - 1} style={{border:'none', background:'none', cursor:'pointer', fontWeight:'bold'}}>← Older</button>
-                    <span style={{fontSize: '0.8rem', color: '#555'}}>{viewIndex === 0 ? "Latest Update" : `History (${history.length - viewIndex}/${history.length})`}</span>
-                    <button onClick={() => setViewIndex(Math.max(viewIndex - 1, 0))} disabled={viewIndex === 0} style={{border:'none', background:'none', cursor:'pointer', fontWeight:'bold'}}>Newer →</button>
+                    <button onClick={() => setViewIndex(Math.min(viewIndex + 1, history.length - 1))} disabled={viewIndex >= history.length - 1} style={{border:'none', background:'none', cursor:'pointer', fontWeight:'bold', color: '#93c5fd'}}>← Older</button>
+                    <span style={{fontSize: '0.8rem', color: 'rgba(200,216,232,0.6)'}}>{viewIndex === 0 ? "Latest Update" : `History (${history.length - viewIndex}/${history.length})`}</span>
+                    <button onClick={() => setViewIndex(Math.max(viewIndex - 1, 0))} disabled={viewIndex === 0} style={{border:'none', background:'none', cursor:'pointer', fontWeight:'bold', color: '#93c5fd'}}>Newer →</button>
                 </div>
             )}
 
@@ -551,21 +551,21 @@ const IntelligenceBriefWidget: React.FC<{ profile: CaseProfile, onUpdate: (d: Do
                 </div>
             )}
             {onAddTask && currentView?.suggestedTasks && currentView.suggestedTasks.length > 0 && (
-                <div style={{ marginTop: '0.75rem', borderTop: '1px solid rgba(0,0,0,0.08)', paddingTop: '0.75rem' }}>
+                <div style={{ marginTop: '0.75rem', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '0.75rem' }}>
                     <div style={{ fontSize: '0.8rem', fontWeight: 700, marginBottom: '0.4rem' }}>💡 Suggested Next Steps</div>
                     {currentView.suggestedTasks.map((s: any, i: number) => (
-                        <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.4rem 0', borderBottom: i < currentView.suggestedTasks.length - 1 ? '1px solid rgba(0,0,0,0.04)' : 'none' }}>
+                        <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.4rem 0', borderBottom: i < currentView.suggestedTasks.length - 1 ? '1px solid rgba(255,255,255,0.06)' : 'none' }}>
                             <div style={{ fontSize: '0.85rem', flex: 1 }}>
                                 <span className={`mini-priority ${s.priority.toLowerCase()}`} style={{ marginRight: '0.5rem' }}>{s.priority}</span>
                                 {s.task}
                             </div>
-                            <button onClick={() => onAddTask(s.task, s.priority)} style={{ background: 'none', border: '1px solid var(--md-sys-color-primary)', color: 'var(--md-sys-color-primary)', borderRadius: '6px', padding: '2px 8px', fontSize: '0.75rem', cursor: 'pointer', whiteSpace: 'nowrap', marginLeft: '0.5rem' }}>+ Add</button>
+                            <button onClick={() => onAddTask(s.task, s.priority)} style={{ background: 'none', border: '1px solid rgba(147,197,253,0.4)', color: '#93c5fd', borderRadius: '6px', padding: '2px 8px', fontSize: '0.75rem', cursor: 'pointer', whiteSpace: 'nowrap', marginLeft: '0.5rem' }}>+ Add</button>
                         </div>
                     ))}
                 </div>
             )}
             <div style={{ marginTop: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: '0.7rem', color: '#666' }}>Generated: {currentView?.dateGenerated}</span>
+                <span style={{ fontSize: '0.7rem', color: 'rgba(200,216,232,0.5)' }}>Generated: {currentView?.dateGenerated}</span>
                 <button className="button-secondary" onClick={refreshAnalysis} style={{ fontSize: '0.7rem', padding: '2px 8px' }}>
                     {viewIndex === 0 ? 'Refresh Analysis' : 'Jump to Latest'}
                 </button>
@@ -600,8 +600,8 @@ const CriticalTasksWidget: React.FC<{ items: ActionItem[], onStart: () => void, 
 
     if (incomplete.length === 0) {
         return (
-            <div className="critical-tasks-empty" style={{ backgroundColor: '#e8f5e9', borderColor: '#4caf50' }}>
-                <h4 style={{ color: '#1b5e20' }}>All Listed Tasks Complete</h4>
+            <div className="critical-tasks-empty" style={{ backgroundColor: 'rgba(129,199,132,0.1)', borderColor: 'rgba(76,175,80,0.5)' }}>
+                <h4 style={{ color: '#81c784' }}>All Listed Tasks Complete</h4>
                 <p>The mission isn't over. Review strategy or brainstorm next steps.</p>
                 <button className="button-secondary" onClick={onBrainstorm}>Brainstorm Next Actions</button>
             </div>
@@ -616,22 +616,24 @@ const CriticalTasksWidget: React.FC<{ items: ActionItem[], onStart: () => void, 
     return (
         <div className="critical-tasks-list">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-                <div style={{ fontSize: '0.8rem', textTransform: 'uppercase', color: '#666' }}>{title}</div>
-                <div style={{ fontSize: '0.7rem', color: 'var(--md-sys-color-on-surface-variant)', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                    <span style={{ fontWeight: 700, color: 'var(--md-sys-color-primary)' }}>{completedCount}</span> done · <span style={{ fontWeight: 700 }}>{incomplete.length}</span> to go
+                <div style={{ fontSize: '0.8rem', textTransform: 'uppercase', color: 'rgba(200,216,232,0.5)', letterSpacing: '1px' }}>{title}</div>
+                <div style={{ fontSize: '0.7rem', color: 'rgba(200,216,232,0.6)', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                    <span style={{ fontWeight: 700, color: '#93c5fd' }}>{completedCount}</span> done · <span style={{ fontWeight: 700 }}>{incomplete.length}</span> to go
                 </div>
             </div>
-            {topTasks.length === 0 && <div style={{ fontSize: '0.7rem', color: '#4caf50', fontWeight: 'bold', marginBottom: '0.5rem' }}>High Priority Cleared ✅</div>}
+            {topTasks.length === 0 && <div style={{ fontSize: '0.7rem', color: '#81c784', fontWeight: 'bold', marginBottom: '0.5rem' }}>High Priority Cleared ✅</div>}
             {tasksToShow.map(task => (
                 <div key={task.id} className="mini-task-card" onClick={onViewTasks} style={{ cursor: 'pointer' }}>
                     <span className={`mini-priority ${task.priority.toLowerCase()}`}>{task.priority}</span>
                     <span className="mini-task-text">{task.task}</span>
                 </div>
             ))}
-            {onViewTasks && <button onClick={onViewTasks} style={{ background: 'none', border: 'none', color: 'var(--md-sys-color-primary)', fontSize: '0.8rem', cursor: 'pointer', padding: '0.4rem 0', width: '100%', textAlign: 'center' }}>View all tasks →</button>}
-            {topTasks.length === 0 && nextTasks.length === 0 && (
-                <button className="button-secondary full-width" onClick={onBrainstorm} style={{marginTop: '0.5rem', fontSize: '0.85rem'}}>+ Add More Tasks</button>
-            )}
+            {onViewTasks && <button onClick={onViewTasks} style={{ background: 'none', border: 'none', color: '#93c5fd', fontSize: '0.8rem', cursor: 'pointer', padding: '0.4rem 0', width: '100%', textAlign: 'center' }}>View all tasks →</button>}
+            <div style={{ marginTop: '0.5rem', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '0.5rem' }}>
+                <button onClick={onBrainstorm} style={{ background: 'rgba(147,197,253,0.15)', border: '1px solid rgba(147,197,253,0.3)', borderRadius: '8px', padding: '0.5rem 0.75rem', fontSize: '0.8rem', cursor: 'pointer', width: '100%', color: '#93c5fd', fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem' }}>
+                    💡 What should I do next?
+                </button>
+            </div>
         </div>
     );
 };
@@ -724,26 +726,27 @@ const MomentumTracker: React.FC<{ items: ActionItem[] }> = ({ items }) => {
         return d.toLocaleDateString('en', { weekday: 'short' }).charAt(0);
     };
 
+    const activeDays = activityData.filter(d => d.count > 0).length;
+    const totalActivity = activityData.reduce((sum, d) => sum + d.count, 0);
+
     return (
         <div className="momentum-tracker">
-            <div className="momentum-header">
-                <div className="momentum-title">
-                    {stats.streak > 0 ? `🔥 ${stats.streak}-day streak` : '📊 Your Activity'}
-                </div>
-                <div className="momentum-subtitle">Last 30 days</div>
-            </div>
-            <div className="momentum-heatmap">
-                {activityData.map((d, i) => (
-                    <div key={d.date} className="heatmap-cell" title={`${d.date}: ${d.count} action${d.count !== 1 ? 's' : ''}`} style={{ backgroundColor: getColor(d.count) }}>
-                        {i % 7 === 0 && <span className="heatmap-day-label">{weekDay(d.date)}</span>}
-                    </div>
-                ))}
-            </div>
             <div className="momentum-stats">
                 {stats.tasksCompleted > 0 && <div className="momentum-stat"><span className="stat-number">{stats.tasksCompleted}</span><span className="stat-label">tasks done</span></div>}
                 {stats.logsAdded > 0 && <div className="momentum-stat"><span className="stat-number">{stats.logsAdded}</span><span className="stat-label">evidence logged</span></div>}
                 {stats.expensesLogged > 0 && <div className="momentum-stat"><span className="stat-number">{stats.expensesLogged}</span><span className="stat-label">expenses tracked</span></div>}
                 {stats.docsUploaded > 0 && <div className="momentum-stat"><span className="stat-number">{stats.docsUploaded}</span><span className="stat-label">docs uploaded</span></div>}
+            </div>
+            <div className="momentum-bar-row">
+                {activityData.slice(-14).map((d) => (
+                    <div key={d.date} className="momentum-bar-col" title={`${d.date}: ${d.count} action${d.count !== 1 ? 's' : ''}`}>
+                        <div className="momentum-bar" style={{ height: d.count > 0 ? Math.max(6, (d.count / maxCount) * 32) + 'px' : '3px', backgroundColor: d.count > 0 ? 'var(--md-sys-color-primary)' : '#e2e8f0' }} />
+                    </div>
+                ))}
+            </div>
+            <div className="momentum-footer">
+                <span>{activeDays > 0 ? `${activeDays} active day${activeDays !== 1 ? 's' : ''} in last 2 weeks` : 'No recent activity'}</span>
+                {stats.streak > 1 && <span style={{ fontWeight: 700, color: 'var(--md-sys-color-primary)' }}>🔥 {stats.streak}-day streak</span>}
             </div>
         </div>
     );
@@ -1470,15 +1473,38 @@ const CaseJournal: React.FC = () => {
         }
     };
 
-    const startEdit = (log: LogEntry) => {
-        setEditingId(log.id);
-        setEditText(log.description);
+    const startEdit = (item: any) => {
+        setEditingId(item.id);
+        setEditText(item.timelineType === 'doc' ? (item.summary || '') : (item.description || ''));
     };
 
-    const saveEdit = (id: string) => {
-        setLogs(logs.map(l => l.id === id ? { ...l, description: editText } : l));
+    const saveEdit = async (id: string, isDoc: boolean) => {
+        if (isDoc) {
+            // Update doc summary in IndexedDB
+            try {
+                const vaultDb = await openVaultDB();
+                const tx = vaultDb.transaction(STORE_NAME, 'readwrite');
+                const store = tx.objectStore(STORE_NAME);
+                const req = store.get(id);
+                req.onsuccess = () => {
+                    if (req.result) {
+                        req.result.summary = editText;
+                        store.put(req.result);
+                    }
+                };
+                tx.oncomplete = () => fetchTimeline();
+            } catch {}
+        } else {
+            setLogs(logs.map(l => l.id === id ? { ...l, description: editText } : l));
+        }
         setEditingId(null);
         setEditText('');
+    };
+
+    const deleteDoc = async (id: string) => {
+        if (!confirm('Delete this document from the timeline?')) return;
+        await deleteFileFromLocalVault(id);
+        fetchTimeline();
     };
 
     const togglePublic = async (id: string, isDoc: boolean, currentVal: boolean) => {
@@ -1655,23 +1681,19 @@ const CaseJournal: React.FC = () => {
                                     >
                                         🌍
                                     </button>
-                                    {!isDoc && (
-                                        <>
-                                            <button onClick={() => startEdit(item)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.2rem' }} title="Edit Entry">
-                                                ✏️
-                                            </button>
-                                            <button onClick={() => deleteLog(item.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.2rem', color: '#ba1a1a' }} title="Delete Entry">
-                                                🗑️
-                                            </button>
-                                        </>
-                                    )}
+                                    <button onClick={() => startEdit(item)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.2rem' }} title="Edit Entry">
+                                        ✏️
+                                    </button>
+                                    <button onClick={() => isDoc ? deleteDoc(item.id) : deleteLog(item.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.2rem', color: '#ba1a1a' }} title="Delete Entry">
+                                        🗑️
+                                    </button>
                                 </div>
                             </div>
-                            {!isDoc && editingId === item.id ? (
+                            {editingId === item.id ? (
                                 <div style={{ marginTop: '0.5rem' }}>
                                     <textarea value={editText} onChange={e => setEditText(e.target.value)} rows={3} style={{ width: '100%', boxSizing: 'border-box' }} />
                                     <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.4rem' }}>
-                                        <button className="button-primary" onClick={() => saveEdit(item.id)} style={{ fontSize: '0.85rem', padding: '0.3rem 0.8rem' }}>Save</button>
+                                        <button className="button-primary" onClick={() => saveEdit(item.id, isDoc)} style={{ fontSize: '0.85rem', padding: '0.3rem 0.8rem' }}>Save</button>
                                         <button className="button-secondary" onClick={() => setEditingId(null)} style={{ fontSize: '0.85rem', padding: '0.3rem 0.8rem' }}>Cancel</button>
                                     </div>
                                 </div>
@@ -1918,86 +1940,373 @@ const ExpensesTracker: React.FC = () => {
         </div>
     );
 };
-const LiveGuide: React.FC = () => {
+// --- LIVE GUIDE TOOL DECLARATIONS (for Gemini function calling) ---
+const liveGuideTools = [
+    {
+        name: 'add_task',
+        description: 'Add a new task to the parent\'s action plan. Use this when they mention something they need to do, or when you suggest an action step.',
+        parameters: {
+            type: 'OBJECT',
+            properties: {
+                task: { type: 'STRING', description: 'Short task description' },
+                description: { type: 'STRING', description: 'Detailed explanation of what to do' },
+                priority: { type: 'STRING', enum: ['Immediate', 'High', 'Medium', 'Low'] },
+                category: { type: 'STRING', description: 'Category like Legal, Government, Investigation, etc.' }
+            },
+            required: ['task', 'priority', 'category']
+        }
+    },
+    {
+        name: 'log_evidence',
+        description: 'Log a call, email, meeting, or event to the case journal. Use when the parent describes something that happened.',
+        parameters: {
+            type: 'OBJECT',
+            properties: {
+                type: { type: 'STRING', enum: ['Phone Call', 'Email', 'In-Person', 'Police Interaction', 'Court', 'Sighting', 'Other'] },
+                description: { type: 'STRING', description: 'What happened' },
+                peopleInvolved: { type: 'STRING', description: 'Who was involved' }
+            },
+            required: ['type', 'description']
+        }
+    },
+    {
+        name: 'add_contact',
+        description: 'Save a new contact (lawyer, agent, official, etc.) to the contact list.',
+        parameters: {
+            type: 'OBJECT',
+            properties: {
+                name: { type: 'STRING', description: 'Person\'s name' },
+                role: { type: 'STRING', description: 'Their role (e.g., FBI Agent, Family Lawyer, etc.)' },
+                email: { type: 'STRING', description: 'Email if mentioned' },
+                phone: { type: 'STRING', description: 'Phone if mentioned' },
+                notes: { type: 'STRING', description: 'Any context about this contact' }
+            },
+            required: ['name', 'role']
+        }
+    },
+    {
+        name: 'navigate_to',
+        description: 'Open a specific page in the app for the parent. Use when they ask to see something or when you want to show them a relevant tool.',
+        parameters: {
+            type: 'OBJECT',
+            properties: {
+                page: { type: 'STRING', enum: ['dashboard', 'myChecklist', 'taskBrainstormer', 'caseJournal', 'documentVault', 'correspondence', 'expenses', 'contactList', 'knowledgeBase', 'campaignBuilder', 'supportResources'] }
+            },
+            required: ['page']
+        }
+    },
+    {
+        name: 'log_expense',
+        description: 'Log an expense related to the recovery case.',
+        parameters: {
+            type: 'OBJECT',
+            properties: {
+                description: { type: 'STRING', description: 'What the expense was for' },
+                amount: { type: 'NUMBER', description: 'Amount in dollars' },
+                category: { type: 'STRING', enum: ['Legal', 'Travel', 'Investigation', 'Administrative', 'Other'] }
+            },
+            required: ['description', 'amount', 'category']
+        }
+    }
+];
+
+interface LiveGuideProps {
+    profile: CaseProfile;
+    items: ActionItem[];
+    onAddTask: (task: ActionItem) => void;
+    onNavigate: (view: View) => void;
+}
+
+const LiveGuide: React.FC<LiveGuideProps> = ({ profile, items, onAddTask, onNavigate }) => {
     const [connected, setConnected] = useState(false);
+    const [muted, setMuted] = useState(false);
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const [logs, setLogs] = useState<string[]>([]);
+    const [actionLog, setActionLog] = useState<{ icon: string; text: string }[]>([]);
 
-    const audioContextRef = useRef<AudioContext | null>(null);
+    const inputCtxRef = useRef<AudioContext | null>(null);
+    const outputCtxRef = useRef<AudioContext | null>(null);
+    const outputGainRef = useRef<GainNode | null>(null);
     const analyserRef = useRef<AnalyserNode | null>(null);
     const websocketRef = useRef<WebSocket | null>(null);
+    const streamRef = useRef<MediaStream | null>(null);
+    const nextStartRef = useRef<number>(0);
+    const sourcesRef = useRef<Set<AudioBufferSourceNode>>(new Set());
+    const mutedRef = useRef(false);
 
-    // Cleanup WebSocket and AudioContext on unmount
+    useEffect(() => { mutedRef.current = muted; }, [muted]);
+
     useEffect(() => {
         return () => {
             websocketRef.current?.close();
-            audioContextRef.current?.close();
+            streamRef.current?.getTracks().forEach(t => t.stop());
+            if (inputCtxRef.current?.state !== 'closed') inputCtxRef.current?.close();
+            if (outputCtxRef.current?.state !== 'closed') outputCtxRef.current?.close();
         };
     }, []);
 
+    const logAction = (icon: string, text: string) => {
+        setActionLog(prev => [{ icon, text }, ...prev].slice(0, 20));
+    };
+
+    const handleToolCall = (fc: any) => {
+        try {
+            const args = fc.args || {};
+            switch (fc.name) {
+                case 'add_task': {
+                    const newTask: ActionItem = {
+                        id: Date.now().toString(),
+                        category: args.category || 'General',
+                        task: args.task || 'New Task',
+                        description: args.description || '',
+                        priority: args.priority || 'High',
+                        completed: false
+                    };
+                    onAddTask(newTask);
+                    logAction('📋', `Added task: ${newTask.task}`);
+                    break;
+                }
+                case 'log_evidence': {
+                    const entry: LogEntry = {
+                        id: Date.now().toString(),
+                        date: new Date().toLocaleDateString('en-CA'),
+                        time: new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' }),
+                        type: args.type || 'Other',
+                        description: args.description || '',
+                        peopleInvolved: args.peopleInvolved || '',
+                        createdAt: new Date().toISOString()
+                    };
+                    // Save to localStorage directly (CaseJournal reads from there)
+                    try {
+                        const existing: LogEntry[] = JSON.parse(localStorage.getItem('caseLogs') || '[]');
+                        localStorage.setItem('caseLogs', JSON.stringify([entry, ...existing]));
+                    } catch {}
+                    logAction('🗂️', `Logged: ${args.type} — ${(args.description || '').substring(0, 60)}...`);
+                    break;
+                }
+                case 'add_contact': {
+                    const contact: ContactEntry = {
+                        id: Date.now().toString(),
+                        name: args.name || 'Unknown',
+                        role: args.role || '',
+                        email: args.email || '',
+                        phone: args.phone || '',
+                        notes: args.notes || ''
+                    };
+                    try {
+                        const existing: ContactEntry[] = JSON.parse(localStorage.getItem('caseContacts') || '[]');
+                        localStorage.setItem('caseContacts', JSON.stringify([contact, ...existing]));
+                    } catch {}
+                    logAction('📇', `Added contact: ${contact.name} (${contact.role})`);
+                    break;
+                }
+                case 'navigate_to': {
+                    if (args.page) {
+                        onNavigate(args.page as View);
+                        logAction('🔗', `Opened: ${args.page}`);
+                    }
+                    break;
+                }
+                case 'log_expense': {
+                    const expense: ExpenseEntry = {
+                        id: Date.now().toString(),
+                        date: new Date().toLocaleDateString('en-CA'),
+                        description: args.description || '',
+                        amount: Number(args.amount) || 0,
+                        currency: 'USD',
+                        category: args.category || 'Other'
+                    };
+                    try {
+                        const existing: ExpenseEntry[] = JSON.parse(localStorage.getItem('caseExpenses') || '[]');
+                        localStorage.setItem('caseExpenses', JSON.stringify([expense, ...existing]));
+                    } catch {}
+                    logAction('💰', `Logged expense: $${expense.amount} — ${expense.description}`);
+                    break;
+                }
+            }
+            return 'ok';
+        } catch (e) {
+            return 'error: ' + e;
+        }
+    };
+
     const connect = async () => {
         try {
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            
-            audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
-            analyserRef.current = audioContextRef.current.createAnalyser();
-            const source = audioContextRef.current.createMediaStreamSource(stream);
-            source.connect(analyserRef.current);
-            drawVisualizer();
+            streamRef.current = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+            // Dual AudioContext: 16kHz in, 24kHz out
+            inputCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
+            outputCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
+
+            // Output chain: gain → analyser → speakers
+            outputGainRef.current = outputCtxRef.current.createGain();
+            analyserRef.current = outputCtxRef.current.createAnalyser();
+            analyserRef.current.fftSize = 512;
+            outputGainRef.current.connect(analyserRef.current);
+            analyserRef.current.connect(outputCtxRef.current.destination);
+
+            // Input visualizer (separate analyser on input context)
+            const inputAnalyser = inputCtxRef.current.createAnalyser();
+            const inputSource = inputCtxRef.current.createMediaStreamSource(streamRef.current);
+            inputSource.connect(inputAnalyser);
+            drawVisualizer(inputAnalyser);
 
             const ws = new WebSocket(`wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key=${process.env.API_KEY}`);
             websocketRef.current = ws;
-            
+
+            // Build system instruction with case context
+            const activeTasks = items.filter(i => !i.completed).slice(0, 5).map(t => `- [${t.priority}] ${t.task}`).join('\n');
+            const systemInstruction = `You are a compassionate, knowledgeable recovery assistant helping a parent whose child has been internationally abducted. Speak like a calm, experienced advisor — not a robot, not a therapist. Be direct and action-oriented.
+
+CASE CONTEXT:
+- Child's Name: ${profile.childName || 'Unknown'}
+- Taken From: ${profile.fromCountry || 'Unknown'} → To: ${profile.toCountry || 'Unknown'}
+- Custody Status: ${profile.custodyStatus || 'Unknown'}
+- Abductor: ${profile.abductorRelationship || 'Unknown'}
+${profile.abductionDate ? `- Date: ${profile.abductionDate} (Day ${Math.floor((new Date().getTime() - new Date(profile.abductionDate).getTime()) / (1000 * 3600 * 24))})` : ''}
+
+CURRENT ACTIVE TASKS:
+${activeTasks || 'None yet'}
+
+CAPABILITIES — You can take ACTIONS for the parent using your tools:
+- add_task: Add action items to their checklist
+- log_evidence: Record calls, emails, meetings, sightings in their case journal
+- add_contact: Save lawyers, agents, officials to their contacts
+- navigate_to: Open app pages to show them relevant tools
+- log_expense: Track money spent on the recovery
+
+BEHAVIOR:
+- When they tell you about something that happened (a call, meeting, email), LOG IT using log_evidence
+- When they mention a person by name and role, SAVE THEM using add_contact
+- When you suggest they should do something, ADD IT as a task using add_task
+- When they ask to see something, NAVIGATE THEM using navigate_to
+- When they mention spending money, LOG IT using log_expense
+- Always tell them what you did: "I've added that to your task list" or "I logged that call in your journal"
+- Keep responses concise. They're stressed. Don't monologue.
+- If they're emotional, acknowledge it briefly, then guide them to the next concrete step.`;
+
             ws.onopen = () => {
                 setConnected(true);
-                setLogs(prev => [...prev, "Connected. Speak now."]);
-                ws.send(JSON.stringify({ setup: { model: "models/gemini-2.5-flash-native-audio-preview-09-2025" } }));
+                setLogs(prev => [...prev, "Connected. Tell me what's going on."]);
+
+                // Setup with tools and system instruction
+                ws.send(JSON.stringify({
+                    setup: {
+                        model: "models/gemini-2.5-flash-native-audio-preview-09-2025",
+                        generation_config: {
+                            response_modalities: ["AUDIO"],
+                            temperature: 0.7
+                        },
+                        system_instruction: {
+                            parts: [{ text: systemInstruction }]
+                        },
+                        tools: [{ function_declarations: liveGuideTools }]
+                    }
+                }));
             };
 
             ws.onmessage = async (event) => {
+                // Handle text/JSON messages (tool calls come as JSON)
+                if (typeof event.data === 'string') {
+                    try {
+                        const msg = JSON.parse(event.data);
+
+                        // Handle tool calls
+                        if (msg.toolCall) {
+                            const responses: any[] = [];
+                            for (const fc of (msg.toolCall.functionCalls || [])) {
+                                const result = handleToolCall(fc);
+                                responses.push({ id: fc.id, name: fc.name, response: { output: result } });
+                            }
+                            // Send tool responses back
+                            ws.send(JSON.stringify({ tool_response: { function_responses: responses } }));
+                        }
+
+                        // Handle audio in JSON envelope
+                        const audioPart = msg.serverContent?.modelTurn?.parts?.find((p: any) => p.inlineData?.data);
+                        if (audioPart && outputCtxRef.current && outputGainRef.current) {
+                            const audioBytes = decode(audioPart.inlineData.data);
+                            const audioBuffer = await decodeAudioData(audioBytes, outputCtxRef.current, 24000, 1);
+                            const bufferSource = outputCtxRef.current.createBufferSource();
+                            bufferSource.buffer = audioBuffer;
+                            bufferSource.connect(outputGainRef.current);
+                            bufferSource.addEventListener('ended', () => sourcesRef.current.delete(bufferSource));
+                            nextStartRef.current = Math.max(nextStartRef.current, outputCtxRef.current.currentTime);
+                            bufferSource.start(nextStartRef.current);
+                            nextStartRef.current += audioBuffer.duration;
+                            sourcesRef.current.add(bufferSource);
+                        }
+
+                        // Handle interruption
+                        if (msg.serverContent?.interrupted) {
+                            sourcesRef.current.forEach(s => { try { s.stop(); } catch {} });
+                            sourcesRef.current.clear();
+                            nextStartRef.current = 0;
+                        }
+                    } catch {}
+                }
+
+                // Handle raw binary audio (some responses come as Blob)
                 if (event.data instanceof Blob) {
-                     const arrayBuffer = await event.data.arrayBuffer();
-                     const audioBuffer = await decodeAudioData(
-                        new Uint8Array(arrayBuffer),
-                        audioContextRef.current!,
-                        24000,
-                        1,
-                    );
-                    const source = audioContextRef.current!.createBufferSource();
-                    source.buffer = audioBuffer;
-                    source.connect(audioContextRef.current!.destination);
-                    source.start();
+                    try {
+                        const arrayBuffer = await event.data.arrayBuffer();
+                        if (outputCtxRef.current && outputGainRef.current) {
+                            const audioBuffer = await decodeAudioData(new Uint8Array(arrayBuffer), outputCtxRef.current, 24000, 1);
+                            const bufferSource = outputCtxRef.current.createBufferSource();
+                            bufferSource.buffer = audioBuffer;
+                            bufferSource.connect(outputGainRef.current);
+                            bufferSource.addEventListener('ended', () => sourcesRef.current.delete(bufferSource));
+                            nextStartRef.current = Math.max(nextStartRef.current, outputCtxRef.current.currentTime);
+                            bufferSource.start(nextStartRef.current);
+                            nextStartRef.current += audioBuffer.duration;
+                            sourcesRef.current.add(bufferSource);
+                        }
+                    } catch {}
                 }
             };
 
-            const mediaRecorder = new MediaRecorder(stream);
-            mediaRecorder.ondataavailable = async (e) => {
-                if (e.data.size > 0 && ws.readyState === WebSocket.OPEN) {
-                    const buffer = await e.data.arrayBuffer();
-                    const base64 = encode(new Uint8Array(buffer));
-                    ws.send(JSON.stringify({ realtime_input: { media_chunks: [{ mime_type: "audio/pcm", data: base64 }] } }));
+            ws.onerror = () => setLogs(prev => [...prev, "Connection error."]);
+            ws.onclose = () => { setConnected(false); setLogs(prev => [...prev, "Session ended."]); };
+
+            // Mic capture: PCM 16-bit → base64 → WebSocket
+            const scriptProcessor = inputCtxRef.current.createScriptProcessor(4096, 1, 1);
+            const micSource = inputCtxRef.current.createMediaStreamSource(streamRef.current);
+
+            scriptProcessor.onaudioprocess = (e) => {
+                if (mutedRef.current) return;
+                if (ws.readyState !== WebSocket.OPEN) return;
+                const input = e.inputBuffer.getChannelData(0);
+                const pcm = new Int16Array(input.length);
+                for (let i = 0; i < input.length; i++) {
+                    pcm[i] = Math.max(-1, Math.min(1, input[i])) * 0x7fff;
                 }
+                const base64 = encode(new Uint8Array(pcm.buffer));
+                ws.send(JSON.stringify({ realtime_input: { media_chunks: [{ mime_type: "audio/pcm;rate=16000", data: base64 }] } }));
             };
-            mediaRecorder.start(100);
+            micSource.connect(scriptProcessor);
+            scriptProcessor.connect(inputCtxRef.current.destination);
 
         } catch (e) {
             console.error(e);
-            setLogs(prev => [...prev, "Connection Failed."]);
+            setLogs(prev => [...prev, "Failed to connect. Check microphone permissions."]);
         }
     };
 
-    const interrupt = () => {
-        if (websocketRef.current?.readyState === WebSocket.OPEN) {
-            websocketRef.current.send(JSON.stringify({ client_content: { turns: [{ role: "user", parts: [{ text: " " }] }], turn_complete: true } }));
-            setLogs(prev => [...prev, "Sent nudge..."]);
-        }
+    const disconnect = () => {
+        websocketRef.current?.close();
+        streamRef.current?.getTracks().forEach(t => t.stop());
+        sourcesRef.current.forEach(s => { try { s.stop(); } catch {} });
+        sourcesRef.current.clear();
+        if (inputCtxRef.current?.state !== 'closed') inputCtxRef.current?.close();
+        if (outputCtxRef.current?.state !== 'closed') outputCtxRef.current?.close();
+        setConnected(false);
+        nextStartRef.current = 0;
     };
 
-    const drawVisualizer = () => {
-        if (!canvasRef.current || !analyserRef.current) return;
+    const drawVisualizer = (analyser: AnalyserNode) => {
+        if (!canvasRef.current) return;
         const canvas = canvasRef.current;
         const ctx = canvas.getContext('2d');
-        const analyser = analyserRef.current;
         const bufferLength = analyser.frequencyBinCount;
         const dataArray = new Uint8Array(bufferLength);
 
@@ -2005,18 +2314,17 @@ const LiveGuide: React.FC = () => {
             requestAnimationFrame(draw);
             analyser.getByteTimeDomainData(dataArray);
             if (!ctx) return;
-            ctx.fillStyle = '#e1e2ec';
+            ctx.fillStyle = '#f0f2f8';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             ctx.lineWidth = 2;
-            ctx.strokeStyle = '#1e3a5f';
+            ctx.strokeStyle = connected ? '#1e3a5f' : '#a0aec0';
             ctx.beginPath();
-            const sliceWidth = canvas.width * 1.0 / bufferLength;
+            const sliceWidth = canvas.width / bufferLength;
             let x = 0;
-            for(let i = 0; i < bufferLength; i++) {
+            for (let i = 0; i < bufferLength; i++) {
                 const v = dataArray[i] / 128.0;
                 const y = v * canvas.height / 2;
-                if(i === 0) ctx.moveTo(x, y);
-                else ctx.lineTo(x, y);
+                if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
                 x += sliceWidth;
             }
             ctx.lineTo(canvas.width, canvas.height / 2);
@@ -2026,23 +2334,60 @@ const LiveGuide: React.FC = () => {
     };
 
     return (
-        <div className="tool-card" style={{ cursor: 'default' }}>
-            <h2>Live Strategy Guide</h2>
-            <p>Speak directly with the AI. If it doesn't reply, tap "Push to Reply".</p>
-            <canvas ref={canvasRef} className="audio-visualizer" width="600" height="100"></canvas>
-            <div style={{ display: 'flex', gap: '1rem' }}>
+        <div style={{ maxWidth: '700px', margin: '0 auto' }}>
+            <h2>Talk to AI</h2>
+            <p style={{ color: '#666', marginBottom: '1rem' }}>Tell me what's happening. I can add tasks, log evidence, save contacts, and track expenses — just by listening.</p>
+
+            <canvas ref={canvasRef} className="audio-visualizer" width="600" height="80" style={{ borderRadius: '12px', border: '1px solid #e2e8f0' }}></canvas>
+
+            <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1rem', flexWrap: 'wrap' }}>
                 {!connected ? (
-                    <button className="button-primary" onClick={connect}>Start Voice Session</button>
+                    <button className="button-primary" onClick={connect} style={{ flex: 1 }}>🎙️ Start Voice Session</button>
                 ) : (
                     <>
-                         <div className="status-pill active">Listening...</div>
-                         <button className="button-secondary" onClick={interrupt}>✋ Push to Reply</button>
+                        <button className={muted ? 'button-primary' : 'button-secondary'} onClick={() => setMuted(!muted)} style={{ minWidth: '120px' }}>
+                            {muted ? '🔇 Unmute' : '🎤 Muted'}
+                        </button>
+                        <button className="button-secondary" onClick={disconnect} style={{ minWidth: '100px' }}>⏹ End</button>
                     </>
                 )}
             </div>
-            <div style={{ marginTop: '1rem', maxHeight: '200px', overflowY: 'auto', fontSize: '0.9rem', color: '#666' }}>
-                {logs.map((l, i) => <div key={i}>{l}</div>)}
-            </div>
+
+            {/* Action log — shows what AI did */}
+            {actionLog.length > 0 && (
+                <div style={{ marginTop: '1.25rem', padding: '0.75rem', background: '#f0fdf4', borderRadius: '10px', border: '1px solid #bbf7d0' }}>
+                    <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#166534', marginBottom: '0.5rem', textTransform: 'uppercase' }}>Actions Taken</div>
+                    {actionLog.slice(0, 8).map((a, i) => (
+                        <div key={i} style={{ fontSize: '0.85rem', padding: '0.25rem 0', color: '#374151', display: 'flex', gap: '0.4rem', alignItems: 'flex-start' }}>
+                            <span>{a.icon}</span><span>{a.text}</span>
+                        </div>
+                    ))}
+                </div>
+            )}
+
+            {/* Status log */}
+            {logs.length > 0 && (
+                <div style={{ marginTop: '0.75rem', fontSize: '0.8rem', color: '#999' }}>
+                    {logs.slice(-3).map((l, i) => <div key={i}>{l}</div>)}
+                </div>
+            )}
+
+            {connected && (
+                <div style={{ marginTop: '1.25rem', padding: '0.75rem', background: '#f8fafc', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+                    <div style={{ fontSize: '0.7rem', color: '#999', marginBottom: '0.5rem' }}>Try saying:</div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
+                        {[
+                            "I just spoke with my lawyer",
+                            "Add a task to file the Hague application",
+                            "Show me my tasks",
+                            "I spent $500 on legal fees",
+                            "What should I do next?"
+                        ].map((s, i) => (
+                            <span key={i} style={{ fontSize: '0.75rem', padding: '0.25rem 0.6rem', background: '#e2e8f0', borderRadius: '100px', color: '#475569' }}>{s}</span>
+                        ))}
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
@@ -3984,21 +4329,21 @@ const App: React.FC = () => {
 
     // Navigation items for the sidebar
     const navItems: { icon: string; label: string; view: View; section?: string }[] = [
-        { icon: '🏠', label: 'Dashboard', view: 'dashboard', section: 'Overview' },
-        { icon: '📋', label: 'My Tasks', view: 'myChecklist', section: 'Case Tools' },
-        { icon: '💡', label: 'Ask AI', view: 'taskBrainstormer' },
-        { icon: '🗂️', label: 'Case Journal', view: 'caseJournal' },
-        { icon: '🔒', label: 'Uploaded Files', view: 'documentVault' },
-        { icon: '📧', label: 'Draft Emails', view: 'correspondence' },
-        { icon: '💰', label: 'Expenses', view: 'expenses' },
-        { icon: '📇', label: 'Contacts', view: 'contactList' },
-        { icon: '🎙️', label: 'Talk to AI', view: 'liveConversation', section: 'AI Help' },
-        { icon: '📚', label: 'Guides & Templates', view: 'knowledgeBase' },
-        { icon: '🧠', label: 'Support & Wellbeing', view: 'supportResources' },
-        { icon: '📣', label: 'Public Campaign', view: 'campaignBuilder', section: 'More' },
-        { icon: '🛡️', label: 'Prevention', view: 'prevention' },
-        { icon: '❓', label: 'How This Works', view: 'howItWorks' },
-        { icon: '⚙️', label: 'Settings', view: 'caseSettings' },
+        { icon: '', label: 'Dashboard', view: 'dashboard', section: 'Overview' },
+        { icon: '', label: 'My Tasks', view: 'myChecklist', section: 'Case Tools' },
+        { icon: '', label: 'Ask AI', view: 'taskBrainstormer' },
+        { icon: '', label: 'Case Journal', view: 'caseJournal' },
+        { icon: '', label: 'Uploaded Files', view: 'documentVault' },
+        { icon: '', label: 'Draft Emails', view: 'correspondence' },
+        { icon: '', label: 'Expenses', view: 'expenses' },
+        { icon: '', label: 'Contacts', view: 'contactList' },
+        { icon: '', label: 'Talk to AI', view: 'liveConversation', section: 'AI Help' },
+        { icon: '', label: 'Guides & Templates', view: 'knowledgeBase' },
+        { icon: '', label: 'Support & Wellbeing', view: 'supportResources' },
+        { icon: '', label: 'Public Campaign', view: 'campaignBuilder', section: 'More' },
+        { icon: '', label: 'Prevention', view: 'prevention' },
+        { icon: '', label: 'How This Works', view: 'howItWorks' },
+        { icon: '', label: 'Settings', view: 'caseSettings' },
     ];
 
     const navigateTo = (v: View) => { setView(v); setSidebarOpen(false); };
@@ -4037,61 +4382,61 @@ const App: React.FC = () => {
                              <IntelligenceBriefWidget profile={caseProfile} onUpdate={handleDossierUpdate} onAddTask={handleAddSuggestedTask} />
                         </div>
                         <MomentumTracker items={items} />
-                        <div style={{ marginTop: '2rem', borderTop: '1px solid #e1e2ec', paddingTop: '1.5rem' }}>
+                        <div style={{ marginTop: '2rem', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '1.5rem' }}>
                              <SimilarCasesWidget from={caseProfile.fromCountry} to={caseProfile.toCountry} />
                         </div>
                     </div>
 
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <h3 className="section-title" style={{ margin: 0 }}>Recovery Toolkit</h3>
-                        <button onClick={() => navigateTo('howItWorks')} style={{ background: 'none', border: '1px solid var(--md-sys-color-outline)', color: 'var(--md-sys-color-on-surface-variant)', borderRadius: '8px', padding: '0.3rem 0.8rem', fontSize: '0.8rem', cursor: 'pointer' }}>❓ How This Works</button>
+                        <button onClick={() => navigateTo('howItWorks')} style={{ background: 'none', border: '1px solid var(--md-sys-color-outline)', color: 'var(--md-sys-color-on-surface-variant)', borderRadius: '8px', padding: '0.3rem 0.8rem', fontSize: '0.8rem', cursor: 'pointer' }}>How This Works</button>
                     </div>
 
                     {/* 2. TOOL GRID */}
                     <div className="tools-grid">
                         <div className="tool-card" onClick={() => navigateTo('myChecklist')}>
-                            <h3>📋 Action Plan</h3>
+                            <h3>My Tasks</h3>
                             <p>Your master checklist of legal and operational tasks.</p>
                         </div>
                         <div className="tool-card" onClick={() => navigateTo('taskBrainstormer')}>
-                            <h3>💡 Strategy Chat</h3>
+                            <h3>Ask AI</h3>
                             <p>Brainstorm problems and turn worries into tasks.</p>
                         </div>
                         <div className="tool-card" onClick={() => navigateTo('caseJournal')}>
-                            <h3>🗂️ Evidence Locker</h3>
+                            <h3>Case Journal</h3>
                             <p>Log calls, map documents to timeline, and export for court.</p>
                         </div>
                         <div className="tool-card" onClick={() => navigateTo('liveConversation')}>
-                            <h3>🎙️ Live Strategy Guide</h3>
+                            <h3>Talk to AI</h3>
                             <p>Voice-activated AI companion for crisis moments.</p>
                         </div>
                         <div className="tool-card" onClick={() => navigateTo('expenses')}>
-                            <h3>💰 Expense Tracker</h3>
-                            <p>Log every dollar spent for future restitution claims.</p>
+                            <h3>Expenses</h3>
+                            <p>Log every cost for future restitution claims.</p>
                         </div>
                         <div className="tool-card" onClick={() => navigateTo('correspondence')}>
-                            <h3>📧 Comms HQ</h3>
-                            <p>Draft professional emails to FBI, State Dept, and Lawyers.</p>
+                            <h3>Draft Emails</h3>
+                            <p>Draft professional emails to authorities and lawyers.</p>
                         </div>
                         <div className="tool-card" onClick={() => navigateTo('documentVault')}>
-                            <h3>🔒 Digital Vault</h3>
+                            <h3>Uploaded Files</h3>
                             <p>Securely store and analyze court orders and reports.</p>
                         </div>
                         <div className="tool-card" onClick={() => navigateTo('knowledgeBase')}>
-                            <h3>📚 Knowledge Base</h3>
+                            <h3>Guides & Templates</h3>
                             <p>Templates, guides, and legal resources.</p>
                         </div>
                         <div className="tool-card" onClick={() => navigateTo('campaignBuilder')}>
-                            <h3>📣 Campaign Site</h3>
+                            <h3>Public Campaign</h3>
                             <p>Build and host a public website to find your child.</p>
                         </div>
                         <div className="tool-card" onClick={() => navigateTo('contactList')}>
-                            <h3>📇 Contact List</h3>
+                            <h3>Contacts</h3>
                             <p>Build and manage your list of lawyers, agencies, and key contacts.</p>
                         </div>
                         <div className="tool-card" onClick={() => navigateTo('supportResources')}>
-                            <h3>🧠 Support & Mental Health</h3>
-                            <p>Find therapists, support groups, NGOs, and financial aid for your situation.</p>
+                            <h3>Support & Wellbeing</h3>
+                            <p>Find therapists, support groups, NGOs, and financial aid.</p>
                         </div>
                     </div>
                 </div>
@@ -4100,7 +4445,7 @@ const App: React.FC = () => {
             case 'taskBrainstormer': return <TaskBrainstormer profile={caseProfile} onAddTask={handleAddTask} items={items} />;
             case 'caseJournal': return <CaseJournal />;
             case 'expenses': return <ExpensesTracker />;
-            case 'liveConversation': return <LiveGuide />;
+            case 'liveConversation': return <LiveGuide profile={caseProfile} items={items} onAddTask={handleAddTask} onNavigate={navigateTo} />;
             case 'correspondence': return <CorrespondenceHelper profile={caseProfile} />;
             case 'documentVault': return <DocumentVault />;
             case 'knowledgeBase': return <KnowledgeBaseBuilder />;
@@ -4126,7 +4471,6 @@ const App: React.FC = () => {
                 <React.Fragment key={item.view}>
                     {sectionLabel && <div className="sidebar-section-label">{sectionLabel}</div>}
                     <button className={`sidebar-link${view === item.view ? ' active' : ''}`} onClick={() => navigateTo(item.view)}>
-                        <span className="sidebar-icon">{item.icon}</span>
                         {item.label}
                     </button>
                 </React.Fragment>
