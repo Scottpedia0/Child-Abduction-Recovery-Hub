@@ -6,6 +6,7 @@ import { getFirestore, collection, getDocs, addDoc, doc, updateDoc, writeBatch, 
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, User, signInAnonymously } from "firebase/auth";
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
+import { knowledgeBaseTemplates } from './knowledgeBaseTemplates.js';
 
 // --- FIREBASE INITIALIZATION ---
 const firebaseConfig = {
@@ -357,15 +358,15 @@ const TaskAssistantModal: React.FC<{ task: ActionItem, onClose: () => void }> = 
     return (
         <div className="tour-backdrop" onClick={onClose}>
             <div className="tour-card" onClick={e => e.stopPropagation()} style={{ width: '600px', height: '80vh', display: 'flex', flexDirection: 'column' }}>
-                <div className="tour-header" style={{ borderBottom: '1px solid #eee', paddingBottom: '1rem' }}>
+                <div className="tour-header" style={{ borderBottom: '1px solid var(--border-default)', paddingBottom: '1rem' }}>
                     <div>
                         <h3 style={{ margin: 0 }}>🤖 Task Assistant</h3>
-                        <div style={{ fontSize: '0.8rem', color: '#666' }}>{task.task}</div>
+                        <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{task.task}</div>
                     </div>
                     <button className="tour-close" onClick={onClose}>×</button>
                 </div>
                 
-                <div style={{ flexGrow: 1, overflowY: 'auto', padding: '1rem', backgroundColor: '#f8f9fa' }}>
+                <div style={{ flexGrow: 1, overflowY: 'auto', padding: '1rem', backgroundColor: 'var(--surface-raised)' }}>
                     {messages.map((m, i) => (
                         <div key={i} style={{ marginBottom: '1rem', display: 'flex', justifyContent: m.role === 'user' ? 'flex-end' : 'flex-start' }}>
                             <div style={{ 
@@ -373,7 +374,7 @@ const TaskAssistantModal: React.FC<{ task: ActionItem, onClose: () => void }> = 
                                 color: m.role === 'user' ? 'white' : 'black',
                                 padding: '0.8rem', 
                                 borderRadius: '12px',
-                                border: m.role === 'ai' ? '1px solid #ddd' : 'none',
+                                border: m.role === 'ai' ? '1px solid var(--border-default)' : 'none',
                                 maxWidth: '80%',
                                 whiteSpace: 'pre-wrap',
                                 fontSize: '0.95rem'
@@ -382,13 +383,13 @@ const TaskAssistantModal: React.FC<{ task: ActionItem, onClose: () => void }> = 
                             </div>
                         </div>
                     ))}
-                    {loading && <div style={{ fontSize: '0.8rem', color: '#666', fontStyle: 'italic' }}>Thinking...</div>}
+                    {loading && <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontStyle: 'italic' }}>Thinking...</div>}
                 </div>
 
-                <div style={{ padding: '1rem', borderTop: '1px solid #eee', display: 'flex', gap: '0.5rem' }}>
-                    <input 
-                        type="text" 
-                        value={input} 
+                <div style={{ padding: '1rem', borderTop: '1px solid var(--border-default)', display: 'flex', gap: '0.5rem' }}>
+                    <input
+                        type="text"
+                        value={input}
                         onChange={e => setInput(e.target.value)}
                         onKeyDown={e => e.key === 'Enter' && handleSend()}
                         placeholder="Ask for help (e.g. 'Draft the letter', 'What is the URL?')"
@@ -559,7 +560,7 @@ const IntelligenceBriefWidget: React.FC<{ profile: CaseProfile, onUpdate: (d: Do
                                 <span className={`mini-priority ${s.priority.toLowerCase()}`} style={{ marginRight: '0.5rem' }}>{s.priority}</span>
                                 {s.task}
                             </div>
-                            <button onClick={() => onAddTask(s.task, s.priority)} style={{ background: 'none', border: '1px solid rgba(147,197,253,0.4)', color: '#93c5fd', borderRadius: '6px', padding: '2px 8px', fontSize: '0.75rem', cursor: 'pointer', whiteSpace: 'nowrap', marginLeft: '0.5rem' }}>+ Add</button>
+                            <button onClick={() => onAddTask(s.task, s.priority)} style={{ background: 'none', border: '1px solid rgba(147,197,253,0.4)', color: '#93c5fd', borderRadius: '8px', padding: '2px 8px', fontSize: '0.75rem', cursor: 'pointer', whiteSpace: 'nowrap', marginLeft: '0.5rem' }}>+ Add</button>
                         </div>
                     ))}
                 </div>
@@ -710,7 +711,6 @@ const MomentumTracker: React.FC<{ items: ActionItem[] }> = ({ items }) => {
     }, [items]);
 
     const totalActions = stats.tasksCompleted + stats.logsAdded + stats.expensesLogged + stats.docsUploaded;
-    if (totalActions === 0) return null; // Don't show if no activity yet
 
     const maxCount = Math.max(...activityData.map(d => d.count), 1);
     const getColor = (count: number) => {
@@ -731,23 +731,35 @@ const MomentumTracker: React.FC<{ items: ActionItem[] }> = ({ items }) => {
 
     return (
         <div className="momentum-tracker">
-            <div className="momentum-stats">
-                {stats.tasksCompleted > 0 && <div className="momentum-stat"><span className="stat-number">{stats.tasksCompleted}</span><span className="stat-label">tasks done</span></div>}
-                {stats.logsAdded > 0 && <div className="momentum-stat"><span className="stat-number">{stats.logsAdded}</span><span className="stat-label">evidence logged</span></div>}
-                {stats.expensesLogged > 0 && <div className="momentum-stat"><span className="stat-number">{stats.expensesLogged}</span><span className="stat-label">expenses tracked</span></div>}
-                {stats.docsUploaded > 0 && <div className="momentum-stat"><span className="stat-number">{stats.docsUploaded}</span><span className="stat-label">docs uploaded</span></div>}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: totalActions > 0 ? '0.5rem' : 0 }}>
+                <span style={{ fontSize: '0.65rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'rgba(200,216,232,0.4)' }}>Your Momentum</span>
+                {stats.streak > 1 && <span style={{ fontSize: '0.7rem', fontWeight: 700, color: '#93c5fd' }}>🔥 {stats.streak}-day streak</span>}
             </div>
-            <div className="momentum-bar-row">
-                {activityData.slice(-14).map((d) => (
-                    <div key={d.date} className="momentum-bar-col" title={`${d.date}: ${d.count} action${d.count !== 1 ? 's' : ''}`}>
-                        <div className="momentum-bar" style={{ height: d.count > 0 ? Math.max(6, (d.count / maxCount) * 32) + 'px' : '3px', backgroundColor: d.count > 0 ? 'var(--md-sys-color-primary)' : '#e2e8f0' }} />
+            {totalActions === 0 ? (
+                <div style={{ textAlign: 'center', padding: '0.75rem 0', fontSize: '0.8rem', color: 'rgba(200,216,232,0.5)' }}>
+                    Every action counts. Complete a task, log evidence, or upload a document to start tracking.
+                </div>
+            ) : (
+                <>
+                    <div className="momentum-stats">
+                        {stats.tasksCompleted > 0 && <div className="momentum-stat"><span className="stat-number">{stats.tasksCompleted}</span><span className="stat-label">tasks done</span></div>}
+                        {stats.logsAdded > 0 && <div className="momentum-stat"><span className="stat-number">{stats.logsAdded}</span><span className="stat-label">evidence logged</span></div>}
+                        {stats.expensesLogged > 0 && <div className="momentum-stat"><span className="stat-number">{stats.expensesLogged}</span><span className="stat-label">expenses tracked</span></div>}
+                        {stats.docsUploaded > 0 && <div className="momentum-stat"><span className="stat-number">{stats.docsUploaded}</span><span className="stat-label">docs uploaded</span></div>}
                     </div>
-                ))}
-            </div>
-            <div className="momentum-footer">
-                <span>{activeDays > 0 ? `${activeDays} active day${activeDays !== 1 ? 's' : ''} in last 2 weeks` : 'No recent activity'}</span>
-                {stats.streak > 1 && <span style={{ fontWeight: 700, color: 'var(--md-sys-color-primary)' }}>🔥 {stats.streak}-day streak</span>}
-            </div>
+                    <div className="momentum-bar-row">
+                        {activityData.slice(-14).map((d) => (
+                            <div key={d.date} className="momentum-bar-col" title={`${d.date}: ${d.count} action${d.count !== 1 ? 's' : ''}`}>
+                                <div className="momentum-bar" style={{ height: d.count > 0 ? Math.max(6, (d.count / maxCount) * 32) + 'px' : '3px', backgroundColor: d.count > 0 ? 'var(--md-sys-color-primary)' : 'rgba(255,255,255,0.08)' }} />
+                            </div>
+                        ))}
+                    </div>
+                    <div className="momentum-footer">
+                        <span>{activeDays > 0 ? `${activeDays} active day${activeDays !== 1 ? 's' : ''} in last 2 weeks` : 'No recent activity'}</span>
+                        {totalActions > 0 && <span>{totalActions} total action{totalActions !== 1 ? 's' : ''}</span>}
+                    </div>
+                </>
+            )}
         </div>
     );
 };
@@ -817,6 +829,8 @@ const TaskBrainstormer: React.FC<{ profile: CaseProfile, onAddTask: (task: Actio
     const [loading, setLoading] = useState(false);
     const [vaultDocs, setVaultDocs] = useState<VaultDocument[]>([]);
     const [selectedDocId, setSelectedDocId] = useState<string>('');
+    const [addedTaskIds, setAddedTaskIds] = useState<Set<string>>(new Set());
+    const [dismissedTaskIds, setDismissedTaskIds] = useState<Set<string>>(new Set());
 
     useEffect(() => {
         getFilesFromLocalVault().then(docs => setVaultDocs(docs));
@@ -849,6 +863,8 @@ const TaskBrainstormer: React.FC<{ profile: CaseProfile, onAddTask: (task: Actio
                 recentLogs = parsed.slice(0, 5).map(l => `- ${l.date}: ${l.type} — ${l.description}`).join('\n');
             }
             const existingTasks = items.filter(t => !t.completed).map(t => `- [${t.priority}] ${t.task}`).join('\n');
+            const completedTasks = items.filter(t => t.completed).map(t => `- ${t.task}`).join('\n');
+            const dismissedTexts = messages.flatMap(m => m.suggestedTasks || []).filter(t => dismissedTaskIds.has(t.id) || addedTaskIds.has(t.id)).map(t => `- ${t.task}`).join('\n');
             const dossier = profile.dossierData;
             const intelSummary = dossier ? `Risk: ${dossier.risk}. ${dossier.summary}. Red flags: ${dossier.redFlags?.join(', ')}` : '';
 
@@ -866,6 +882,12 @@ const TaskBrainstormer: React.FC<{ profile: CaseProfile, onAddTask: (task: Actio
 
             CURRENT TASKS (already on their plan — do NOT suggest these):
             ${existingTasks || 'No tasks yet.'}
+
+            COMPLETED TASKS (already done — do NOT suggest these):
+            ${completedTasks || 'None yet.'}
+
+            PREVIOUSLY SUGGESTED / DISMISSED (parent already saw these — do NOT repeat):
+            ${dismissedTexts || 'None.'}
 
             REFERENCE DOCUMENTS:
             ${ragContext || 'No documents uploaded.'}
@@ -942,30 +964,41 @@ const TaskBrainstormer: React.FC<{ profile: CaseProfile, onAddTask: (task: Actio
             <h2>Strategy Chat & Brainstorming</h2>
             <p>Tell me what you're worried about (e.g., "I think they'll move cities" or "I'm out of money"). I'll help you turn that worry into a plan.</p>
             
-            <div style={{ flexGrow: 1, overflowY: 'auto', padding: '1rem', backgroundColor: '#f8f9fa', borderRadius: '8px', marginBottom: '1rem' }}>
+            <div style={{ flexGrow: 1, overflowY: 'auto', padding: '1rem', backgroundColor: 'var(--surface-raised)', borderRadius: '8px', marginBottom: '1rem' }}>
                 {messages.map((m, i) => (
                     <div key={i} style={{ marginBottom: '1rem', alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start' }}>
                         <div style={{ 
-                            backgroundColor: m.role === 'user' ? '#e1f5fe' : 'white', 
+                            backgroundColor: m.role === 'user' ? 'var(--accent-muted)' : 'var(--surface-card)', 
                             padding: '1rem', 
                             borderRadius: '8px',
-                            border: '1px solid #eee',
+                            border: '1px solid var(--border-default)',
                             maxWidth: '80%'
                         }}>
                             <strong>{m.role === 'user' ? 'You' : 'Guide'}: </strong> {m.text}
                             
                             {m.suggestedTasks && m.suggestedTasks.length > 0 && (
-                                <div style={{ marginTop: '0.5rem', borderTop: '1px solid #eee', paddingTop: '0.5rem' }}>
-                                    <div style={{ fontSize: '0.8rem', color: '#666', marginBottom: '0.5rem' }}>SUGGESTED ACTIONS:</div>
-                                    {m.suggestedTasks.map(t => (
-                                        <div key={t.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem', backgroundColor: '#f1f8e9', padding: '0.5rem', borderRadius: '4px' }}>
-                                            <div>
+                                <div style={{ marginTop: '0.5rem', borderTop: '1px solid var(--border-default)', paddingTop: '0.5rem' }}>
+                                    <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.5rem' }}>SUGGESTED ACTIONS:</div>
+                                    {m.suggestedTasks.filter(t => !dismissedTaskIds.has(t.id)).map(t => (
+                                        <div key={t.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem', backgroundColor: addedTaskIds.has(t.id) ? '#e8f5e9' : '#f1f8e9', padding: '0.5rem', borderRadius: '8px', opacity: addedTaskIds.has(t.id) ? 0.7 : 1 }}>
+                                            <div style={{ flex: 1, minWidth: 0 }}>
                                                 <div style={{ fontWeight: 'bold', fontSize: '0.9rem' }}>{t.task}</div>
                                                 <div style={{ fontSize: '0.8rem' }}>{t.description}</div>
                                             </div>
-                                            <button className="button-secondary" style={{ fontSize: '0.8rem', padding: '0.2rem 0.5rem' }} onClick={() => onAddTask(t)}>
-                                                + Add
-                                            </button>
+                                            <div style={{ display: 'flex', gap: '0.3rem', marginLeft: '0.5rem', flexShrink: 0 }}>
+                                                {addedTaskIds.has(t.id) ? (
+                                                    <span style={{ fontSize: '0.75rem', color: '#2e7d32', fontWeight: 600 }}>✓ Added</span>
+                                                ) : (
+                                                    <>
+                                                        <button className="button-secondary" style={{ fontSize: '0.75rem', padding: '0.15rem 0.4rem' }} onClick={() => { onAddTask(t); setAddedTaskIds(prev => new Set(prev).add(t.id)); }}>
+                                                            + Add
+                                                        </button>
+                                                        <button style={{ fontSize: '0.75rem', padding: '0.15rem 0.4rem', background: 'none', border: '1px solid var(--border-default)', borderRadius: '6px', cursor: 'pointer', color: 'var(--text-tertiary)' }} onClick={() => setDismissedTaskIds(prev => new Set(prev).add(t.id))} title="Don't suggest this again">
+                                                            ✕
+                                                        </button>
+                                                    </>
+                                                )}
+                                            </div>
                                         </div>
                                     ))}
                                 </div>
@@ -973,12 +1006,12 @@ const TaskBrainstormer: React.FC<{ profile: CaseProfile, onAddTask: (task: Actio
                         </div>
                     </div>
                 ))}
-                {loading && <div style={{ fontStyle: 'italic', color: '#666' }}>Thinking...</div>}
+                {loading && <div style={{ fontStyle: 'italic', color: 'var(--text-secondary)' }}>Thinking...</div>}
             </div>
 
             {vaultDocs.length > 0 && (
                 <div style={{ marginBottom: '0.5rem' }}>
-                    <select value={selectedDocId} onChange={e => setSelectedDocId(e.target.value)} style={{ width: '100%', padding: '0.4rem', fontSize: '0.85rem', borderRadius: '6px', border: '1px solid #ddd' }}>
+                    <select value={selectedDocId} onChange={e => setSelectedDocId(e.target.value)} style={{ width: '100%', padding: '0.4rem', fontSize: '0.85rem', borderRadius: '8px', border: '1px solid var(--border-default)' }}>
                         <option value="">📎 Attach a document (optional)</option>
                         {vaultDocs.map(d => <option key={d.id} value={d.id}>{d.name} — {d.type} ({d.date})</option>)}
                     </select>
@@ -1144,7 +1177,7 @@ const MyChecklist: React.FC<{ items: ActionItem[]; setItems: React.Dispatch<Reac
 
             {showArchived ? (
                 <div className="items-list" style={{ marginTop: '1rem' }}>
-                    <p style={{ fontSize: '0.85rem', color: '#666', marginBottom: '1rem' }}>Archived tasks are still included in PDF exports. Click restore to move back to active.</p>
+                    <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>Archived tasks are still included in PDF exports. Click restore to move back to active.</p>
                     {archivedItems.map(item => (
                         <div key={item.id} className="action-item completed">
                             <div className="action-item-header">
@@ -1153,7 +1186,7 @@ const MyChecklist: React.FC<{ items: ActionItem[]; setItems: React.Dispatch<Reac
                             </div>
                         </div>
                     ))}
-                    {archivedItems.length === 0 && <p style={{ color: '#666', textAlign: 'center' }}>No archived tasks yet. Complete a task and archive it to keep your list clean.</p>}
+                    {archivedItems.length === 0 && <p style={{ color: 'var(--text-secondary)', textAlign: 'center' }}>No archived tasks yet. Complete a task and archive it to keep your list clean.</p>}
                 </div>
             ) : (
                 <div className="items-list">
@@ -1169,7 +1202,7 @@ const MyChecklist: React.FC<{ items: ActionItem[]; setItems: React.Dispatch<Reac
                                         🤖 Help
                                     </button>
                                     {item.completed && (
-                                        <button style={{ background: 'none', border: '1px solid #ddd', borderRadius: '4px', fontSize: '0.7rem', padding: '2px 6px', cursor: 'pointer', color: '#666' }} onClick={() => archiveItem(item.id)} title="Archive">📦</button>
+                                        <button style={{ background: 'none', border: '1px solid var(--border-default)', borderRadius: '4px', fontSize: '0.7rem', padding: '2px 6px', cursor: 'pointer', color: 'var(--text-secondary)' }} onClick={() => archiveItem(item.id)} title="Archive">📦</button>
                                     )}
                                     <span className={`action-item-priority ${item.priority.toLowerCase()}`}>{item.priority}</span>
                                     <button className="action-item-delete" onClick={() => deleteItem(item.id)} title="Delete Task">🗑️</button>
@@ -1179,14 +1212,14 @@ const MyChecklist: React.FC<{ items: ActionItem[]; setItems: React.Dispatch<Reac
                             {item.subtasks && item.subtasks.length > 0 && (
                                 <div style={{ marginLeft: '2rem', marginTop: '0.5rem' }}>
                                     {item.subtasks.map(sub => (
-                                        <div key={sub.id} style={{ fontSize: '0.85rem', color: '#555' }}>- {sub.text}</div>
+                                        <div key={sub.id} style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>- {sub.text}</div>
                                     ))}
                                 </div>
                             )}
                         </div>
                     ))}
                     {items.length === 0 && <p>No items yet. Go to Dashboard to generate a plan.</p>}
-                    {items.length > 0 && filteredItems.length === 0 && <p style={{ color: '#666', textAlign: 'center' }}>No tasks match your search.</p>}
+                    {items.length > 0 && filteredItems.length === 0 && <p style={{ color: 'var(--text-secondary)', textAlign: 'center' }}>No tasks match your search.</p>}
                 </div>
             )}
 
@@ -1288,7 +1321,7 @@ const DocumentVault: React.FC = () => {
     return (
         <div className="tool-card" style={{ cursor: 'default' }}>
             <h2>Digital Vault & RAG Context</h2>
-            <p style={{ fontSize: '0.9rem', color: '#666' }}>Documents are analyzed by AI to extract dates and context.</p>
+            <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>Documents are analyzed by AI to extract dates and context.</p>
             
             <div style={{ padding: '1rem', backgroundColor: '#e3f2fd', borderRadius: '8px', marginBottom: '1rem', textAlign: 'center' }}>
                 <input 
@@ -1306,7 +1339,7 @@ const DocumentVault: React.FC = () => {
 
             <div style={{ marginTop: '1rem' }}>
                 {files.length === 0 && (
-                    <div style={{ textAlign: 'center', padding: '2rem', color: '#666', backgroundColor: '#f8f9fa', borderRadius: '8px' }}>
+                    <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-secondary)', backgroundColor: 'var(--surface-raised)', borderRadius: '8px' }}>
                         <p style={{ fontSize: '0.95rem' }}>Upload court orders, custody agreements, police reports, embassy correspondence — anything related to your case. The AI reads each document, extracts key details, and makes them available to all other tools (Strategy Chat, Comms HQ, etc).</p>
                     </div>
                 )}
@@ -1319,7 +1352,7 @@ const DocumentVault: React.FC = () => {
                             </div>
                             <button onClick={() => handleDelete(f.id)} style={{color: '#ba1a1a', background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.2rem'}} title="Delete Document">🗑️</button>
                         </div>
-                        <div style={{ fontSize: '0.85rem', color: '#666', marginTop: '0.2rem' }}>Dated: {f.date}</div>
+                        <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '0.2rem' }}>Dated: {f.date}</div>
                         <div style={{ fontSize: '0.9rem', marginTop: '0.5rem' }}>{f.summary}</div>
                     </div>
                 ))}
@@ -1356,7 +1389,7 @@ const CaseJournal: React.FC = () => {
              const docItems = docs.map(d => ({
                  ...d,
                  timelineType: 'doc',
-                 dateObj: new Date(d.date || d.uploadedAt)
+                 dateObj: (d.date || d.uploadedAt) ? new Date(d.date || d.uploadedAt) : new Date()
              }));
              const logItems = logs.map(l => ({
                  ...l,
@@ -1501,7 +1534,7 @@ const CaseJournal: React.FC = () => {
         setEditText('');
     };
 
-    const deleteDoc = async (id: string) => {
+    const deleteVaultDoc = async (id: string) => {
         if (!confirm('Delete this document from the timeline?')) return;
         await deleteFileFromLocalVault(id);
         fetchTimeline();
@@ -1607,12 +1640,12 @@ const CaseJournal: React.FC = () => {
                 </div>
             </div>
             
-            <p style={{fontSize:'0.85rem', color: '#666'}}>
+            <p style={{fontSize:'0.85rem', color: 'var(--text-secondary)'}}>
                 Click the Globe 🌍 icon to toggle an event as "Public" for your campaign website.
             </p>
 
             {/* Fixed Z-Index and Positioning for Upload Form */}
-            <div className="form-grid" style={{ position: 'relative', zIndex: 10, backgroundColor: '#f8f9fa', padding: '1rem', borderRadius: '8px', marginBottom: '2rem', border: '1px solid #eee' }}>
+            <div className="form-grid" style={{ position: 'relative', zIndex: 10, backgroundColor: 'var(--surface-raised)', padding: '1rem', borderRadius: '8px', marginBottom: '2rem', border: '1px solid var(--border-default)' }}>
                 <h4 style={{ margin: '0 0 0.5rem 0' }}>Add New Event Log</h4>
                 <select value={newLog.type} onChange={e => setNewLog({...newLog, type: e.target.value})}>
                     <option>Phone Call</option>
@@ -1643,7 +1676,7 @@ const CaseJournal: React.FC = () => {
 
             <div className="journal-timeline">
                 {timelineItems.length === 0 && (
-                    <div style={{ textAlign: 'center', padding: '2rem', color: '#666' }}>
+                    <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-secondary)' }}>
                         <p style={{ fontSize: '1.1rem', fontWeight: 600, marginBottom: '0.5rem' }}>No timeline entries yet</p>
                         <p style={{ fontSize: '0.9rem' }}>Start by uploading documents (court orders, police reports, custody agreements) — the AI will read them and automatically build your timeline. You can also manually log calls, emails, and meetings above.</p>
                     </div>
@@ -1656,13 +1689,13 @@ const CaseJournal: React.FC = () => {
                     const isPublic = item.isPublic || false;
 
                     return (
-                        <div key={item.id || i} className="journal-entry" style={{ borderLeft: isDoc ? '4px solid #715573' : '1px solid #e1e2ec' }}>
+                        <div key={item.id || i} className="journal-entry" style={{ borderLeft: isDoc ? '4px solid #715573' : '1px solid var(--border-default)' }}>
                             <div className="journal-meta" style={{width: '100%'}}>
                                 <span className="journal-badge" style={{ backgroundColor: isDoc ? '#fbd7fc' : '#dbe2f9', color: isDoc ? '#29132d' : '#141b2c' }}>
                                     {isDoc ? `📄 ${item.type}` : item.type}
                                 </span>
-                                <span style={{ fontSize: '0.85rem', color: '#666' }}>
-                                    {isDoc ? new Date(item.date).toLocaleDateString() : `${item.date} at ${item.time}`}
+                                <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                                    {isDoc ? (item.date && !isNaN(new Date(item.date).getTime()) ? new Date(item.date).toLocaleDateString() : 'No date') : `${item.date} at ${item.time}`}
                                 </span>
                                 {!isDoc && item.peopleInvolved && <span style={{ fontSize: '0.85rem', fontStyle: 'italic' }}>with {item.peopleInvolved}</span>}
                                 
@@ -1684,7 +1717,7 @@ const CaseJournal: React.FC = () => {
                                     <button onClick={() => startEdit(item)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.2rem' }} title="Edit Entry">
                                         ✏️
                                     </button>
-                                    <button onClick={() => isDoc ? deleteDoc(item.id) : deleteLog(item.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.2rem', color: '#ba1a1a' }} title="Delete Entry">
+                                    <button onClick={() => isDoc ? deleteVaultDoc(item.id) : deleteLog(item.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.2rem', color: '#ba1a1a' }} title="Delete Entry">
                                         🗑️
                                     </button>
                                 </div>
@@ -1703,7 +1736,7 @@ const CaseJournal: React.FC = () => {
                                         <>
                                             <strong>📎 {item.name}</strong>{item.sourceDocId ? '' : ''}
                                             <br/>
-                                            <span style={{ color: '#555' }}>{item.summary}</span>
+                                            <span style={{ color: 'var(--text-secondary)' }}>{item.summary}</span>
                                         </>
                                     ) : item.description}
                                 </p>
@@ -1721,19 +1754,163 @@ const KnowledgeBaseBuilder: React.FC = () => {
     const [selectedEntry, setSelectedEntry] = useState<KnowledgeBaseEntry | null>(null);
     const [entries, setEntries] = useState<KnowledgeBaseEntry[]>([]);
 
-    // Seed Data (If DB is empty)
+    // Seed Data — Comprehensive Global Knowledge Base
     const seedData: KnowledgeBaseEntry[] = [
-        { 
-            id: '1', entryType: 'resource', name: 'Hague Convention Text (Full)', countryPair: 'Global', resourceType: 'Legal Text', 
-            tags: ['Legal', 'Treaty', 'Official'], summary: 'Full text of the 1980 Hague Convention on the Civil Aspects of International Child Abduction.',
-            fullText: `(Sample Text - Full treaty would be here)\n\nArticle 1\nThe objects of the present Convention are:\na) to secure the prompt return of children wrongfully removed to or retained in any Contracting State;\nb) to ensure that rights of custody and of access under the law of one Contracting State are effectively respected in the other Contracting States.`
+        // --- LEGAL TEXTS & TREATIES ---
+        { id: 'kb-1', entryType: 'resource', name: 'Hague Convention on International Child Abduction (1980)', countryPair: 'Global', resourceType: 'Legal Text',
+            tags: ['Legal', 'Treaty', 'Hague', 'Official'], summary: 'The core international treaty governing the return of children wrongfully removed across borders. Covers 101 signatory countries.',
+            fullText: `THE HAGUE CONVENTION ON THE CIVIL ASPECTS OF INTERNATIONAL CHILD ABDUCTION (1980)\n\nKey Articles:\n\nArticle 1 — Objects\na) To secure the prompt return of children wrongfully removed to or retained in any Contracting State.\nb) To ensure that rights of custody and access are effectively respected across Contracting States.\n\nArticle 3 — Wrongful Removal\nRemoval or retention is wrongful where it breaches custody rights under the law of the State of habitual residence.\n\nArticle 12 — One-Year Rule\nIf proceedings begin within one year, the court SHALL order return. After one year, return may still be ordered unless the child is settled in the new environment.\n\nArticle 13 — Exceptions to Return\na) The left-behind parent was not exercising custody rights.\nb) The left-behind parent consented or acquiesced.\nc) Grave risk of physical/psychological harm (the most litigated exception).\nd) The child objects and has reached an age of maturity.\n\nArticle 15 — Declaration of Wrongfulness\nCourts may request a declaration from the home country that the removal was wrongful.\n\nArticle 21 — Access Rights\nCentral Authorities shall promote peaceful enjoyment of access rights.\n\nKey Deadlines:\n- File within 1 year of abduction for strongest case\n- Central Authority must act within 6 weeks\n- Courts should decide promptly (6 weeks is the benchmark)`
         },
-        { 
-            id: '5', entryType: 'template', name: 'Police Report Filing Template', countryPair: 'Global', resourceType: 'Template', 
-            tags: ['Police', 'Documentation'], summary: 'Standardized format for filing a missing child report to ensure all key details are recorded.',
-            fullText: `MISSING CHILD REPORT - INITIAL INTAKE\n\n1. CHILD INFORMATION\nName: [Full Name]\nDOB: [Date]\nPassport #: [Number]\nLast Known Location: [Address/Country]\n\n2. ABDUCTOR INFORMATION\nName: [Name]\nRelationship: [Role]\nVehicle: [Make/Model/Plate]\n\n3. CIRCUMSTANCES\nDate/Time of Taking: [Time]\nCustody Order in Place? [Yes/No]\nDescription of Taking: [Details]\n\n4. JURISDICTION\n(Note to Officer: This is a parental abduction under federal law. Please enter child into NCIC as Missing Person - Endangered.)`
+        { id: 'kb-2', entryType: 'resource', name: 'Brussels II Revised Regulation (EU)', countryPair: 'EU Countries', resourceType: 'Legal Text',
+            tags: ['Legal', 'EU', 'Brussels II'], summary: 'EU regulation that strengthens Hague Convention returns within EU member states. Stricter rules, harder to refuse return.',
+            fullText: `BRUSSELS II REVISED (REGULATION 2201/2003) — EU CHILD ABDUCTION RULES\n\nApplies between: All EU member states (except Denmark)\n\nKey Features:\n- Overrides Hague Convention Article 13(b) in many cases\n- The court in the country of habitual residence has FINAL say\n- Even if the destination country refuses return, the home country court can override that decision\n- Stricter timelines: 6 weeks for first instance court decisions\n- Child must be heard during proceedings (if age/maturity allows)\n\nArticle 11(4): A court cannot refuse return under Article 13(b) if adequate arrangements have been made to protect the child.\n\nArticle 11(6-8) — The Override Mechanism:\nIf a court refuses to return the child, the case goes BACK to the court of habitual residence, which can order the return — and that order is directly enforceable.\n\nPractical Effect: Within the EU, it is extremely difficult to prevent a return order. The home country court always gets the last word.`
+        },
+        { id: 'kb-3', entryType: 'resource', name: 'UN Convention on the Rights of the Child', countryPair: 'Global', resourceType: 'Legal Text',
+            tags: ['Legal', 'UN', 'Children Rights'], summary: 'The most widely ratified human rights treaty. Article 11 specifically addresses illicit transfer and non-return of children abroad.',
+            fullText: `UN CONVENTION ON THE RIGHTS OF THE CHILD — RELEVANT ARTICLES\n\nArticle 11:\n1. States Parties shall take measures to combat the illicit transfer and non-return of children abroad.\n2. States shall promote bilateral or multilateral agreements or accession to existing agreements.\n\nArticle 9:\n1. A child shall not be separated from their parents against their will, except when competent authorities determine separation is in the child's best interests.\n3. The right to maintain personal relations and direct contact with BOTH parents on a regular basis.\n\nArticle 10:\n1. Applications to enter or leave a State for family reunification shall be dealt with in a positive, humane and expeditious manner.\n\nArticle 35:\nStates shall take all measures to prevent the abduction of, sale of, or traffic in children.\n\nWhy This Matters: The UNCRC is ratified by every UN member state except the US. It can be cited in courts worldwide to support the child's right to maintain contact with both parents.`
+        },
+        // --- TEMPLATES ---
+        { id: 'kb-4', entryType: 'template', name: 'Police Report Filing Template', countryPair: 'Global', resourceType: 'Template',
+            tags: ['Police', 'Documentation', 'First Steps'], summary: 'Standardized format for filing an international parental child abduction report with local police.',
+            fullText: `MISSING CHILD / PARENTAL ABDUCTION — POLICE REPORT TEMPLATE\n\n[Give this document to the officer taking your report]\n\n1. CHILD INFORMATION\nFull Legal Name: _______________\nDate of Birth: _______________\nPassport Number(s): _______________\nNationality/Nationalities: _______________\nLast Known Location: _______________\nPhysical Description: _______________\nRecent Photo Attached: Yes / No\n\n2. TAKING PARENT / ABDUCTOR\nFull Name: _______________\nRelationship to Child: _______________\nNationality: _______________\nPassport Number: _______________\nKnown Addresses Abroad: _______________\nVehicle (if known): _______________\n\n3. CIRCUMSTANCES OF ABDUCTION\nDate/Time of Taking or Last Contact: _______________\nLocation Child Was Taken From: _______________\nDestination Country (known/suspected): _______________\nMethod of Travel (flight, car, etc.): _______________\nFlight Details (if known): _______________\n\n4. CUSTODY STATUS\nCustody Order in Place: Yes / No\nIssuing Court: _______________\nType of Order: Sole / Joint / Other\nCopy of Order Attached: Yes / No\n\n5. REQUEST TO OFFICER\n- Please enter the child into [your country's missing persons database]\n- Please issue a port alert / border alert if available\n- This may constitute an offence under [cite relevant law]\n- Please provide a copy of this report with a case/reference number\n\n6. REPORTING PARENT\nName: _______________\nContact Phone: _______________\nEmail: _______________\nAddress: _______________\nLawyer (if any): _______________`
+        },
+        { id: 'kb-5', entryType: 'template', name: 'Hague Convention Application Template', countryPair: 'Global', resourceType: 'Template',
+            tags: ['Hague', 'Legal', 'Application', 'Central Authority'], summary: 'Template for filing a Hague Convention return application through your Central Authority.',
+            fullText: `HAGUE CONVENTION APPLICATION FOR RETURN OF CHILD\n\n[Submit to YOUR country's Central Authority]\n\nPART 1 — APPLICANT (LEFT-BEHIND PARENT)\nFull Name: _______________\nDate of Birth: _______________\nNationality: _______________\nCurrent Address: _______________\nPhone: _______________\nEmail: _______________\nPassport Number: _______________\n\nPART 2 — CHILD\nFull Name: _______________\nDate of Birth: _______________\nNationality: _______________\nPassport Number(s): _______________\nHabitual Residence Before Removal: _______________\n\nPART 3 — RESPONDENT (TAKING PARENT)\nFull Name: _______________\nDate of Birth: _______________\nNationality: _______________\nCurrent/Suspected Address Abroad: _______________\nPhone (if known): _______________\n\nPART 4 — FACTS\nDate of Wrongful Removal/Retention: _______________\nCountry Child Taken To: _______________\nCircumstances of Removal: _______________\n[Describe what happened — when, how the child was taken, and how you discovered it]\n\nPART 5 — LEGAL BASIS\nCustody Rights Under Law of: _______________\nBasis of Custody: Court Order / Operation of Law / Agreement\nCustody Order Details: _______________\nWere You Exercising Custody Rights? Yes\nDid You Consent to Removal? No\n\nPART 6 — ATTACHMENTS\n□ Copy of custody order (certified/translated if needed)\n□ Child's birth certificate\n□ Photo of child (recent)\n□ Photo of respondent\n□ Marriage/divorce certificate\n□ Proof of habitual residence\n□ Police report\n□ Any relevant communications (texts, emails)\n\nPART 7 — RELIEF SOUGHT\nI request the return of my child to [Country] under the Hague Convention 1980.\n\nSignature: _______________ Date: _______________`
+        },
+        { id: 'kb-6', entryType: 'template', name: 'Letter to Central Authority', countryPair: 'Global', resourceType: 'Template',
+            tags: ['Central Authority', 'Letter', 'Government'], summary: 'Cover letter template to accompany your Hague application to your Central Authority.',
+            fullText: `[Your Name]\n[Your Address]\n[Date]\n\nTo: Central Authority for the Hague Convention\n[Country Name]\n[Address]\n\nRe: Application for Return of [Child's Full Name], DOB [Date]\n\nDear Sir/Madam,\n\nI am writing to request the urgent return of my child, [Child's Name], who was wrongfully [removed from / retained in] [Country] by [Taking Parent's Name] on or about [Date].\n\nMy child's habitual residence was [Country/City] prior to the wrongful removal. I was exercising custody rights at the time of the removal, and I did not consent to the removal or retention.\n\nI am enclosing:\n1. Completed Hague Convention application form\n2. Certified copy of the custody order from [Court Name]\n3. Child's birth certificate\n4. Recent photographs of [Child's Name] and [Taking Parent's Name]\n5. Copy of the police report filed on [Date]\n6. Supporting evidence of habitual residence\n\nI respectfully request that you:\n- Accept and transmit this application to the Central Authority of [Destination Country]\n- Assist in locating my child\n- Take all measures to secure the voluntary return of my child\n- If voluntary return is not possible, initiate judicial proceedings for return\n\nTime is of the essence. Every day that passes makes return more difficult and causes further harm to my child.\n\nI am available at [phone] and [email] at any time.\n\nYours faithfully,\n[Your Name]`
+        },
+        { id: 'kb-7', entryType: 'template', name: 'Embassy/Consulate Contact Letter', countryPair: 'Global', resourceType: 'Template',
+            tags: ['Embassy', 'Consulate', 'Government'], summary: 'Template letter for contacting your country\'s embassy or consulate in the destination country about your child.',
+            fullText: `[Your Name]\n[Your Address]\n[Date]\n\nTo: [Your Country] Embassy / Consulate\n[City, Destination Country]\n\nRe: International Parental Child Abduction — [Child's Full Name], DOB [Date]\n\nDear Consul / Consular Officer,\n\nI am a citizen of [Your Country] and I am writing to report the international parental abduction of my child:\n\nChild: [Full Name], DOB [Date], Passport No. [Number]\nTaking Parent: [Name], believed to be residing in [City/Region, Country]\nDate of Abduction: [Date]\n\nI have filed:\n□ Police report in [Country] — Case No. [Number]\n□ Hague Convention application with [Central Authority]\n□ Custody order from [Court] — Case No. [Number]\n\nI am requesting the following consular assistance:\n1. Welfare and whereabouts check on my child\n2. Confirmation that my child has not been issued a passport by [Destination Country]\n3. Flagging my child's passport to prevent further travel\n4. Information about local legal resources and approved attorneys\n5. Any available support under the consular assistance framework\n\nI understand you cannot intervene in legal proceedings, but I am requesting all available consular support.\n\nI am available immediately at [phone] and [email].\n\nYours sincerely,\n[Your Name]\n[Passport Number]`
+        },
+        { id: 'kb-8', entryType: 'template', name: 'Lawyer Engagement Letter Template', countryPair: 'Global', resourceType: 'Template',
+            tags: ['Lawyer', 'Legal', 'Engagement'], summary: 'Template for initial contact with a family law attorney specializing in international child abduction.',
+            fullText: `INITIAL CONSULTATION REQUEST — INTERNATIONAL CHILD ABDUCTION\n\n[Your Name]\n[Date]\n\nDear [Attorney Name],\n\nI am seeking urgent legal representation regarding the international parental abduction of my child.\n\nCase Summary:\n- Child: [Name], DOB [Date], citizen of [Country/Countries]\n- Taken by: [Name], relationship: [Mother/Father]\n- From: [City, Country] to [City, Country]\n- Date of abduction: [Date]\n- Custody status: [Sole/Joint custody, with details]\n- Hague Convention filed: Yes/No (Date: ___)\n\nKey Questions:\n1. Do you handle Hague Convention cases?\n2. What is your experience with cases involving [Destination Country]?\n3. What are the estimated costs and timeline?\n4. Do you work on a fixed fee, hourly, or contingency basis?\n5. Can you represent me in [Destination Country] or do you work with local counsel there?\n6. What is your assessment of the strength of my case?\n\nDocuments I Can Provide:\n- Custody order\n- Birth certificate\n- Police report\n- Communication evidence (texts, emails)\n- Travel records\n\nI need someone who understands both the legal process and the urgency. Every day matters.\n\nPlease let me know your availability for an initial consultation.\n\nRegards,\n[Your Name]\n[Phone] | [Email]`
+        },
+        { id: 'kb-9', entryType: 'template', name: 'School Records Request Letter', countryPair: 'Global', resourceType: 'Template',
+            tags: ['School', 'Evidence', 'Records'], summary: 'Template to request records from a school where your child may be enrolled in the destination country.',
+            fullText: `[Your Name]\n[Your Address]\n[Date]\n\nTo: Principal / Head of School\n[School Name]\n[Address, City, Country]\n\nRe: Records Request for [Child's Full Name], DOB [Date]\n\nDear Principal,\n\nI am the [mother/father] and legal custodian of [Child's Name], DOB [Date]. I am writing to request information regarding my child's enrollment at your school.\n\nI hold a custody order from [Court Name, Country] (copy enclosed) which grants me [sole/joint] custody. My child was removed from [Country] without my consent on [Date] and I believe they may be enrolled at your institution.\n\nI am requesting:\n1. Confirmation of whether [Child's Name] is enrolled\n2. Copies of enrollment documents and who is listed as guardian\n3. Contact information provided by the enrolling parent\n4. School attendance records\n5. Any emergency contacts on file\n\nPlease note that I have parental rights under the enclosed custody order and under [applicable law]. Withholding this information may constitute aiding in the concealment of a child from a lawful custodian.\n\nI would appreciate your cooperation and discretion. I can be reached at [phone/email].\n\nYours sincerely,\n[Your Name]\n\nEnclosures:\n- Custody order (translated if applicable)\n- Child's birth certificate\n- Your identification`
+        },
+        { id: 'kb-10', entryType: 'template', name: 'Evidence Preservation Checklist', countryPair: 'Global', resourceType: 'Template',
+            tags: ['Evidence', 'Documentation', 'Checklist'], summary: 'Comprehensive checklist of evidence to collect and preserve for court proceedings.',
+            fullText: `EVIDENCE PRESERVATION CHECKLIST — INTERNATIONAL CHILD ABDUCTION\n\nCollect and secure ALL of the following. Courts rely heavily on documented evidence.\n\nIMMEDIATE PRESERVATION:\n□ Screenshots of ALL text messages with taking parent\n□ Email correspondence (download/export full threads)\n□ Social media posts/messages (screenshot with dates visible)\n□ WhatsApp/Telegram/Signal chat exports\n□ Call logs showing communication patterns\n□ Location data (Google Timeline, Find My, etc.)\n□ Flight booking confirmations\n□ Bank/credit card statements showing travel purchases\n\nLEGAL DOCUMENTS:\n□ Custody order (certified copy)\n□ Marriage certificate\n□ Divorce decree (if applicable)\n□ Child's birth certificate\n□ Both parents' passports (copies)\n□ Child's passport (copy)\n□ Visa documents\n□ Police report (with reference number)\n□ Hague application (stamped copy)\n\nPROOF OF HABITUAL RESIDENCE:\n□ Child's school enrollment records\n□ Medical/dental records\n□ Vaccination records\n□ Lease/mortgage showing family home\n□ Utility bills\n□ Child's extracurricular registrations\n□ Photos of child in home environment\n□ Statements from teachers, doctors, neighbors\n\nPROOF OF PARENTAL INVOLVEMENT:\n□ Photos/videos with child (dated)\n□ Records of school pickups, appointments\n□ Financial records showing child support/expenses\n□ Travel records (holidays together)\n□ Communication records showing co-parenting\n\nSTORAGE:\n- Keep ORIGINAL digital files (not just screenshots)\n- Back up everything to cloud storage\n- Create a timeline document linking evidence to dates\n- Keep physical copies in a safe place\n- Share copies with your lawyer\n\nIMPORTANT: Never delete anything. Even seemingly insignificant messages may prove crucial later.`
+        },
+        // --- PROCEDURES ---
+        { id: 'kb-11', entryType: 'procedure', name: 'First 48 Hours: Critical Steps', countryPair: 'Global', resourceType: 'Procedure',
+            tags: ['Urgent', 'First Steps', 'Procedure'], summary: 'The most critical actions to take within the first 48 hours of discovering your child has been abducted.',
+            fullText: `FIRST 48 HOURS — CRITICAL ACTION STEPS\n\nThere is no time to waste. Complete these in order:\n\nHOUR 1-4:\n1. CALL POLICE — File a missing child report in your home country immediately\n   - Insist child is entered into the national missing persons database\n   - Request a port alert / border watch if possible\n   - Get the case reference number in writing\n\n2. SECURE PASSPORTS — Contact your passport authority\n   - Request child's passport be flagged or cancelled\n   - If child has dual nationality, contact BOTH countries' passport offices\n   - Report passports as stolen if necessary\n\n3. CALL A LAWYER — You need TWO lawyers:\n   - One in YOUR country (to file Hague application)\n   - One in the DESTINATION country (to handle local proceedings)\n   - Many countries have legal aid for Hague cases\n\nHOUR 4-12:\n4. CONTACT YOUR CENTRAL AUTHORITY\n   - File a Hague Convention application if applicable\n   - If the destination country is NOT a Hague signatory, ask about alternatives\n\n5. CONTACT YOUR EMBASSY/CONSULATE\n   - Request a welfare check on your child\n   - Ask about passport flagging in the destination country\n   - Request list of approved local attorneys\n\n6. PRESERVE ALL EVIDENCE\n   - Screenshot every message, email, social media post\n   - Download call logs\n   - Save any location data\n   - Document everything with dates and times\n\nHOUR 12-48:\n7. ALERT INTERPOL (through your police)\n   - Request a Yellow Notice (missing person) or Diffusion\n\n8. CONTACT NGOs\n   - International Centre for Missing & Exploited Children (ICMEC)\n   - Your country's missing children organization\n   - They can provide guidance and sometimes legal referrals\n\n9. DO NOT POST ON SOCIAL MEDIA (yet)\n   - Public pressure can backfire if timing is wrong\n   - Consult your lawyer first\n   - The taking parent may go into hiding\n\n10. SECURE YOUR FINANCES\n    - This will be expensive — start planning now\n    - Document every expense from day one\n    - Check if legal aid is available`
+        },
+        { id: 'kb-12', entryType: 'procedure', name: 'Filing a Hague Application: Step by Step', countryPair: 'Global', resourceType: 'Procedure',
+            tags: ['Hague', 'Procedure', 'Step-by-Step'], summary: 'Detailed walkthrough of the Hague Convention application process from filing to court hearing.',
+            fullText: `HAGUE CONVENTION APPLICATION — STEP-BY-STEP GUIDE\n\nSTEP 1: IDENTIFY YOUR CENTRAL AUTHORITY\n- Every Hague signatory has a Central Authority\n- Find yours at: https://www.hcch.net/en/instruments/specialised-sections/child-abduction\n- This is the government body that processes applications\n\nSTEP 2: GATHER YOUR DOCUMENTS\n- Custody order (translated and apostilled/legalized)\n- Child's birth certificate\n- Your identification/passport\n- Photos of child and taking parent\n- Police report\n- Evidence of habitual residence\n- Any evidence of the wrongful removal\n\nSTEP 3: COMPLETE THE APPLICATION\n- Use the standard Hague application form (available from your CA)\n- Be thorough — incomplete applications cause delays\n- Include all known addresses for the taking parent\n- Attach all supporting documents\n\nSTEP 4: SUBMIT TO YOUR CENTRAL AUTHORITY\n- Submit in person if possible (faster)\n- Keep copies of everything submitted\n- Get a receipt/acknowledgment with reference number\n- Ask for the name of the caseworker assigned\n\nSTEP 5: TRANSMISSION TO DESTINATION COUNTRY\n- Your CA sends the application to the destination country's CA\n- This should happen within days, not weeks\n- Follow up if you don't hear back within 2 weeks\n\nSTEP 6: LOCATION AND VOLUNTARY RETURN\n- Destination CA will try to locate your child\n- They may attempt to negotiate a voluntary return first\n- If voluntary return fails, judicial proceedings begin\n\nSTEP 7: COURT PROCEEDINGS\n- A judge in the destination country hears the case\n- You may need to attend (in person or remotely)\n- The court should decide within 6 weeks\n- The ONLY question: was the removal wrongful? The court does NOT decide custody.\n\nSTEP 8: ENFORCEMENT\n- If return is ordered, it must be enforced\n- Enforcement can be the hardest part in some countries\n- Your lawyer in the destination country handles this\n\nKEY TIMELINES:\n- File within 1 year for strongest case\n- Central Authority should act within 6 weeks\n- Court should decide within 6 weeks\n- Total realistic timeline: 3-12 months (varies hugely by country)`
+        },
+        { id: 'kb-13', entryType: 'procedure', name: 'Non-Hague Country Strategy', countryPair: 'Global', resourceType: 'Procedure',
+            tags: ['Non-Hague', 'Strategy', 'Difficult Cases'], summary: 'What to do when your child has been taken to a country that is NOT a signatory to the Hague Convention.',
+            fullText: `STRATEGY FOR NON-HAGUE CONVENTION COUNTRIES\n\nIf the destination country has NOT signed the Hague Convention, the legal path is much harder but NOT impossible.\n\nNon-Hague countries include many nations in the Middle East, North Africa, South/Southeast Asia, and parts of Africa.\n\nSTRATEGY OPTIONS:\n\n1. DIPLOMATIC CHANNELS\n- Contact your Ministry of Foreign Affairs\n- Request consular access to your child\n- Some countries have bilateral agreements outside the Hague\n- Political pressure through elected representatives can help\n\n2. LOCAL LEGAL PROCEEDINGS\n- Hire a lawyer IN the destination country\n- File for custody or visitation under LOCAL law\n- This can be slow, expensive, and unpredictable\n- Cultural and legal biases may exist — be prepared\n\n3. BILATERAL TREATIES\n- Check if your country has a bilateral arrangement with the destination\n- Some countries have consular conventions that address children\n- The EU has agreements with some non-Hague countries\n\n4. CRIMINAL PROSECUTION\n- File criminal charges in your home country\n- This can lead to an Interpol Red Notice\n- The taking parent may be arrested if they travel internationally\n- WARNING: This can make negotiation harder\n\n5. MEDIATION\n- International family mediation (e.g., through MIKK, reunite)\n- Can work when both parties are willing\n- Sometimes faster and less adversarial than courts\n\n6. POLITICAL/PUBLIC PRESSURE\n- Contact your elected representatives\n- Some countries respond to diplomatic pressure\n- Media coverage can help in some situations\n- Be strategic — consult your lawyer first\n\n7. NGO SUPPORT\n- ICMEC, ISS (International Social Service)\n- Country-specific organizations\n- Some offer legal referrals and advocacy\n\nREALITY CHECK:\n- These cases can take years\n- Costs can be very high\n- The legal system in the destination country may not be favorable\n- Maintaining contact with your child is the priority\n- Document EVERYTHING for future proceedings\n- Never give up — the legal landscape changes over time`
+        },
+        // --- GUIDANCE ---
+        { id: 'kb-14', entryType: 'guidance', name: 'Working with Central Authorities', countryPair: 'Global', resourceType: 'Guidance',
+            tags: ['Central Authority', 'Government', 'Tips'], summary: 'Practical advice on how to effectively work with Central Authority caseworkers.',
+            fullText: `WORKING WITH CENTRAL AUTHORITIES — PRACTICAL TIPS\n\nCentral Authorities (CAs) are government bodies that process Hague applications. They vary enormously in quality and speed.\n\nWHAT THEY DO:\n- Receive and transmit applications\n- Help locate the child\n- Attempt to secure voluntary return\n- Arrange for legal proceedings\n- Provide information about local law\n\nWHAT THEY DON'T DO:\n- Represent you in court (you need your own lawyer)\n- Guarantee a timeline\n- Make custody decisions\n- Physically retrieve your child\n\nTIPS FOR EFFECTIVENESS:\n1. BE ORGANIZED — Submit a complete, well-documented application\n2. BE PERSISTENT — Follow up weekly. CAs are often understaffed.\n3. BE POLITE BUT FIRM — Caseworkers handle many cases. Yours needs to stand out.\n4. KEEP A LOG — Record every call, email, and update with dates\n5. ASK FOR THE CASEWORKER'S NAME — Build a relationship\n6. FOLLOW UP IN WRITING — After phone calls, email a summary of what was discussed\n7. KNOW YOUR RIGHTS — CAs are required to act within 6 weeks. If they don't, you can file a complaint.\n8. GET YOUR ELECTED REPRESENTATIVE INVOLVED — A letter from a member of parliament can accelerate things\n9. HIRE A LAWYER IN BOTH COUNTRIES — Don't rely solely on the CA\n10. TRANSLATION — Submit everything pre-translated if possible. This saves weeks.\n\nIF YOUR CA IS SLOW:\n- Request a progress update in writing\n- Set a deadline and follow up\n- Contact the Hague Conference (HCCH) Permanent Bureau\n- Contact your elected representatives\n- Consider going to the destination country directly with your lawyer`
+        },
+        { id: 'kb-15', entryType: 'guidance', name: 'Article 13(b) Defense: Grave Risk', countryPair: 'Global', resourceType: 'Guidance',
+            tags: ['Legal', 'Defense', 'Article 13b', 'Grave Risk'], summary: 'Understanding the "grave risk" defense — the most common reason courts refuse to return children.',
+            fullText: `ARTICLE 13(b) — THE GRAVE RISK DEFENSE\n\nThis is the most commonly raised defense by taking parents. Understanding it helps you prepare.\n\nWHAT IT SAYS:\nThe court is not bound to order return if there is a "grave risk" that return would expose the child to physical or psychological harm or an intolerable situation.\n\nHOW IT'S USED:\nThe taking parent will typically allege:\n- Domestic violence\n- Child abuse\n- Unsafe conditions in the home country\n- Mental health issues of the left-behind parent\n- The child's strong objections\n\nHOW TO COUNTER IT:\n1. UNDERTAKINGS — Offer protective measures:\n   - Agree to live separately\n   - Agree to supervised contact initially\n   - Offer financial support for return\n   - Propose a safe house arrangement\n\n2. EVIDENCE:\n   - Show there were no prior reports of abuse\n   - Provide character references\n   - Show your involvement as a parent\n   - Counter false allegations with evidence\n\n3. HOME COUNTRY PROTECTIONS:\n   - Show that your home country has adequate domestic violence protections\n   - Provide evidence of available shelters, restraining orders, etc.\n   - Courts must consider whether protective measures exist in the home country\n\n4. LEGAL ARGUMENTS:\n   - 13(b) has a HIGH threshold — it's not about best interests\n   - The risk must be GRAVE, not merely concerning\n   - Courts are increasingly skeptical of unsubstantiated allegations\n   - The taking parent bears the burden of proof\n\nIMPORTANT:\n- False allegations of abuse are common in abduction cases\n- Courts are becoming more aware of this tactic\n- Your lawyer should be experienced in countering 13(b) defenses\n- Evidence preparation is KEY — start gathering evidence immediately`
+        },
+        { id: 'kb-16', entryType: 'guidance', name: 'Managing Legal Costs', countryPair: 'Global', resourceType: 'Guidance',
+            tags: ['Costs', 'Financial', 'Legal Aid'], summary: 'Guide to understanding and managing the significant costs of international child abduction cases.',
+            fullText: `MANAGING LEGAL COSTS — INTERNATIONAL CHILD ABDUCTION\n\nThese cases are expensive. Plan carefully.\n\nTYPICAL COSTS:\n- Lawyer in home country: Varies by country and complexity\n- Lawyer in destination country: Often the biggest expense\n- Translation of documents: Certified translations are required\n- Apostille/legalization of documents\n- Travel costs (flights, accommodation for hearings)\n- Court filing fees\n- Expert witness fees (if needed)\n- Private investigator (if child's location unknown)\n\nFUNDING OPTIONS:\n\n1. LEGAL AID\n- Many Hague signatory countries provide free legal representation\n- The destination country's CA can inform you about eligibility\n- In the UK: Legal Aid Agency\n- In the EU: Most countries provide legal aid for Hague cases\n- In the US: The Central Authority can provide referrals\n\n2. PRO BONO\n- Some law firms handle Hague cases pro bono\n- International Bar Association has referral programs\n- University law clinics sometimes assist\n\n3. CROWDFUNDING\n- GoFundMe, JustGiving campaigns\n- Share through your support network\n- Be careful about how much case detail you share publicly\n\n4. NGO ASSISTANCE\n- Some NGOs provide financial assistance or legal referrals\n- ICMEC, reunite, MIKK\n- Country-specific organizations\n\n5. COST ORDERS\n- In some jurisdictions, the court can order the taking parent to pay your legal costs\n- Discuss this with your lawyer\n\nCOST-SAVING TIPS:\n- Do as much preparation yourself as possible\n- Organize your evidence clearly (saves lawyer time)\n- Use certified translation services (not your lawyer's rates)\n- Attend hearings remotely where possible\n- Document EVERY expense — you may be able to claim restitution later`
+        },
+        { id: 'kb-17', entryType: 'guidance', name: 'Maintaining Contact with Your Child', countryPair: 'Global', resourceType: 'Guidance',
+            tags: ['Contact', 'Communication', 'Child'], summary: 'Strategies for maintaining or re-establishing contact with your child during the recovery process.',
+            fullText: `MAINTAINING CONTACT WITH YOUR CHILD\n\nThis is often the hardest part. The taking parent may block all communication.\n\nIMMEDIATE STEPS:\n1. Request contact through the Central Authority\n2. Ask your lawyer to seek a court order for interim contact\n3. Contact through trusted family members/friends\n4. Request welfare check through your embassy/consulate\n\nTYPES OF CONTACT ORDERS:\n- Phone/video calls at scheduled times\n- Monitored communication through a third party\n- In-person supervised visits\n- Letter/email contact\n\nIF CONTACT IS BLOCKED:\n- Document every attempt to make contact\n- Keep a log with dates and times\n- Screenshot any blocked calls or undelivered messages\n- This evidence is valuable in court\n\nWHEN YOU DO GET CONTACT:\n- Stay calm and positive\n- Don't interrogate the child about their situation\n- Don't say negative things about the other parent\n- Tell them you love them and you're working to see them\n- Keep it age-appropriate\n- Note what the child says (for your records, not to use against them)\n\nTECHNOLOGY:\n- WhatsApp, FaceTime, Skype, Zoom for video calls\n- If you can send a device to your child, set up Family Sharing\n- Some parents send letters through trusted intermediaries\n\nPSYCHOLOGICAL IMPACT:\n- Parental alienation is common — the child may seem distant or hostile\n- This is NOT a reflection of your relationship\n- A child psychologist can help you understand and respond\n- Maintain consistency — keep trying even when it hurts\n\nIMPORTANT: Everything you say to your child may be monitored or used against you. Be careful, loving, and appropriate at all times.`
+        },
+        { id: 'kb-18', entryType: 'guidance', name: 'Mental Health and Self-Care', countryPair: 'Global', resourceType: 'Guidance',
+            tags: ['Mental Health', 'Self-Care', 'Support'], summary: 'Taking care of yourself during this crisis is not optional — it is essential to your case.',
+            fullText: `MENTAL HEALTH AND SELF-CARE DURING CHILD ABDUCTION\n\nThis is one of the most traumatic experiences a parent can face. You MUST take care of yourself.\n\nWHY IT MATTERS:\n- You cannot fight for your child if you collapse\n- Courts notice parents who are stable and capable\n- Your child needs you to be strong when they return\n- Burnout leads to mistakes in legal strategy\n\nIMMEDIATE SUPPORT:\n- Talk to someone — a friend, family member, or professional\n- Contact a parent support group (see below)\n- If you're in crisis, call your local mental health helpline\n- Allow yourself to grieve — this is a loss, even if temporary\n\nONGOING STRATEGIES:\n- Maintain routines (sleep, meals, exercise)\n- Limit time spent doom-scrolling or obsessively researching\n- Set specific times for case work, then step away\n- Accept help from friends and family\n- Consider therapy with someone experienced in trauma/grief\n- Journal your feelings (separate from case documentation)\n\nSUPPORT ORGANIZATIONS:\n- reunite (UK): Support groups for parents\n- National Center for Missing & Exploited Children (US)\n- ICMEC: International resources\n- MIKK: Mediation and support\n- Facebook groups for parents in similar situations\n- Local domestic violence or family crisis services\n\nWHAT TO EXPECT:\n- Grief, anger, helplessness are all normal\n- You may experience PTSD symptoms\n- Sleep disruption is very common\n- Concentration difficulties may affect your work\n- Relationships may be strained\n- Financial stress adds to the burden\n\nREMEMBER:\n- Asking for help is a sign of strength, not weakness\n- You are not alone — thousands of parents face this\n- Your child will need you to be well when this is resolved\n- Taking care of yourself IS fighting for your child`
+        },
+        // --- OPSEC ---
+        { id: 'kb-19', entryType: 'opsec', name: 'Digital Security for Parents', countryPair: 'Global', resourceType: 'Operational Security',
+            tags: ['Security', 'Digital', 'Privacy'], summary: 'Protect your digital information and communications during your case.',
+            fullText: `DIGITAL SECURITY — PROTECTING YOUR CASE\n\nThe taking parent (or their lawyer) may try to access your communications or use your online activity against you.\n\nIMMEDIATE ACTIONS:\n□ Change ALL passwords (email, social media, banking)\n□ Enable two-factor authentication everywhere\n□ Remove the taking parent from shared accounts\n□ Check your phone for tracking apps or shared location\n□ Update your devices to latest software\n□ Review who has access to your cloud storage\n\nCOMMUNICATION SECURITY:\n- Use encrypted messaging (Signal, WhatsApp) for sensitive discussions\n- Be aware that emails can be subpoenaed\n- Phone calls with your lawyer are privileged — texts may not be\n- Don't discuss strategy on social media or in group chats\n- Assume anything you write may end up in court\n\nSOCIAL MEDIA:\n- Lock down privacy settings\n- Don't post about the case without legal advice\n- Don't post location data or travel plans\n- Be careful about what friends/family share about you\n- The taking parent's lawyer WILL search your social media\n\nSHARED DEVICES/ACCOUNTS:\n- Remove yourself from shared Apple/Google accounts\n- Deauthorize shared devices\n- Check for shared photo libraries\n- Review Find My Friends / Google sharing\n- Change Wi-Fi passwords at home\n\nDOCUMENT SECURITY:\n- Keep legal documents in a secure location\n- Use encrypted cloud storage for digital copies\n- Don't leave case files where others can access them\n- Password-protect sensitive files\n- Keep a backup of everything off-site`
+        },
+        // --- PREVENTION ---
+        { id: 'kb-20', entryType: 'prevention', name: 'Preventing International Child Abduction', countryPair: 'Global', resourceType: 'Prevention Guide',
+            tags: ['Prevention', 'Risk Factors', 'Early Warning'], summary: 'Warning signs and preventive measures if you suspect your partner may attempt to take your child abroad.',
+            fullText: `PREVENTING INTERNATIONAL CHILD ABDUCTION\n\nIf you suspect your partner may take your child out of the country, act NOW.\n\nRED FLAGS:\n- Talking about moving "back home" permanently\n- Obtaining passport for child without your knowledge\n- Liquidating assets or moving money abroad\n- Quitting their job or ending local commitments\n- Applying for new identity documents\n- Increasing contact with family abroad\n- Making one-way flight bookings\n- Removing important documents from the home\n- Talking negatively about your country\n\nPREVENTIVE MEASURES:\n\n1. PASSPORT CONTROL\n- In many countries, both parents must consent to passport issuance\n- Register an objection with your passport authority\n- Check if child has been issued a second passport by another country\n- Some countries allow a "port alert" on the child\n\n2. COURT ORDERS\n- Seek a Prohibited Steps Order (UK) or equivalent\n- Request the court hold the child's passport\n- Get an order preventing removal from the jurisdiction\n- Register your custody order in the other parent's country\n\n3. DOCUMENTATION\n- Keep copies of all identity documents\n- Photograph your child regularly (for identification)\n- Maintain records of your involvement as a parent\n- Document any threats or suspicious behavior\n\n4. SCHOOL/CHILDCARE\n- Inform school about the risk\n- Ensure school has court orders on file\n- Request that child only be released to authorized persons\n\n5. BORDER MEASURES\n- Contact border authorities about travel restrictions\n- Some countries have departure alert systems\n- Interpol can issue alerts in extreme cases\n\n6. LEGAL PREPARATION\n- Consult a family lawyer experienced in international cases\n- Understand the law in both countries\n- Prepare documentation now, don't wait`
+        },
+        // --- COUNTRY-SPECIFIC GUIDANCE ---
+        { id: 'kb-21', entryType: 'country_matrix', name: 'Central Authority Directory', countryPair: 'Global', resourceType: 'Contact Directory',
+            tags: ['Central Authority', 'Directory', 'Contacts'], summary: 'How to find and contact the Central Authority in any Hague Convention signatory country.',
+            fullText: `CENTRAL AUTHORITY DIRECTORY\n\nEvery country that has signed the Hague Convention has a designated Central Authority. Here's how to find yours:\n\nOFFICIAL DIRECTORY:\nhttps://www.hcch.net/en/instruments/specialised-sections/child-abduction\n(Click "Authorities" to search by country)\n\nKEY CENTRAL AUTHORITIES:\n\nUNITED STATES:\nOffice of Children's Issues, U.S. Department of State\nPhone: 1-888-407-4747\nEmail: PreventAbduction@state.gov\n\nUNITED KINGDOM:\nInternational Child Abduction and Contact Unit (ICACU)\nPhone: +44 (0)3000 616 222\nEmail: icacu@justice.gov.uk\n\nAUSTRALIA:\nAttorney-General's Department\nPhone: +61 2 6141 6666\nEmail: centralauthority@ag.gov.au\n\nCANADA:\nDepartment of Justice (varies by province)\nPhone: 1-613-957-4969\n\nGERMANY:\nBundesamt für Justiz\nPhone: +49 228 99 410-40\n\nFRANCE:\nMinistère de la Justice\nBureau de l'entraide civile et commerciale internationale\n\nNEW ZEALAND:\nMinistry of Justice\nPhone: +64 4 918 8800\n\nFOR ALL OTHER COUNTRIES:\nVisit the HCCH website above or contact:\nHCCH Permanent Bureau\nChurchillplein 6b\n2517 JW The Hague, Netherlands\nPhone: +31 70 363 3303\n\nTIP: If your CA is slow to respond, you can contact the Permanent Bureau for assistance.`
+        },
+        { id: 'kb-22', entryType: 'guidance', name: 'International NGOs and Support Organizations', countryPair: 'Global', resourceType: 'Resource Directory',
+            tags: ['NGO', 'Support', 'Organizations', 'Help'], summary: 'Directory of international NGOs and organizations that assist with child abduction cases.',
+            fullText: `INTERNATIONAL SUPPORT ORGANIZATIONS\n\nThese organizations provide varying levels of support — from information to legal referrals to direct advocacy.\n\nGLOBAL:\n- International Centre for Missing & Exploited Children (ICMEC)\n  www.icmec.org\n  Provides global resources and policy advocacy\n\n- International Social Service (ISS)\n  www.iss-ssi.org\n  Casework across borders, mediation\n\n- MIKK (German Mediation Centre)\n  www.mikk-ev.de\n  International family mediation\n\nUNITED STATES:\n- National Center for Missing & Exploited Children (NCMEC)\n  www.missingkids.org | 1-800-THE-LOST\n\n- Bring Abducted Children Home (BACH)\n  Advocacy and parent support\n\nUNITED KINGDOM:\n- reunite International Child Abduction Centre\n  www.reunite.org | +44 116 255 6234\n  Advice line, mediation, support groups\n\n- International Child Abduction and Contact Unit (ICACU)\n  Part of UK government — handles Hague applications\n\nAUSTRALIA:\n- International Social Service Australia\n  www.iss.org.au\n\nEUROPE:\n- Missing Children Europe\n  www.missingchildreneurope.eu\n  Coordinates national hotlines (116 000 in most EU countries)\n\n- Child Focus (Belgium)\n  www.childfocus.be\n\nMEDIATION SERVICES:\n- reunite mediation scheme (UK)\n- MIKK (Germany/International)\n- Crossroads Family Mediation (various)\n\nLEGAL NETWORKS:\n- International Academy of Family Lawyers (IAFL)\n  Can help find specialized lawyers worldwide\n\n- International Bar Association Family Law Section\n  Referral network for international cases`
+        },
+        { id: 'kb-23', entryType: 'guidance', name: 'Preparing for Court Hearings', countryPair: 'Global', resourceType: 'Guidance',
+            tags: ['Court', 'Preparation', 'Hearing'], summary: 'How to prepare for Hague Convention court hearings and what to expect.',
+            fullText: `PREPARING FOR COURT HEARINGS\n\nWhether you attend in person or remotely, preparation is critical.\n\nBEFORE THE HEARING:\n\n1. WITH YOUR LAWYER:\n- Review all submitted evidence\n- Prepare your witness statement\n- Anticipate the other side's arguments (especially Article 13b)\n- Prepare responses to allegations\n- Understand the judge's likely questions\n- Practice giving evidence clearly and calmly\n\n2. DOCUMENTATION:\n- Bring organized copies of everything\n- Prepare a chronological timeline of events\n- Have key documents flagged and easily accessible\n- Bring translated copies of foreign documents\n\n3. PRACTICAL:\n- Confirm date, time, and location of hearing\n- Arrange interpreter if needed\n- Plan travel and accommodation\n- If attending remotely, test technology in advance\n- Arrange childcare if you have other children\n\nDURING THE HEARING:\n- Dress formally and respectfully\n- Speak clearly and directly to the judge\n- Stay calm, even when hearing false allegations\n- Don't interrupt the other side\n- Follow your lawyer's guidance\n- Take notes if possible\n- If you don't understand a question, ask for clarification\n\nWHAT THE JUDGE CONSIDERS:\n- Was the removal wrongful under Article 3?\n- Was the child habitually resident in your country?\n- Were you exercising custody rights?\n- Has less than one year passed? (Article 12)\n- Does any exception under Article 13 apply?\n- What is the child's view? (if old enough)\n\nAFTER THE HEARING:\n- The judge may give a decision immediately or reserve it\n- If return is ordered, discuss enforcement timeline\n- If return is refused, discuss appeal options immediately\n- Document the outcome and next steps with your lawyer`
+        },
+        { id: 'kb-24', entryType: 'template', name: 'Witness Statement Template', countryPair: 'Global', resourceType: 'Template',
+            tags: ['Court', 'Witness Statement', 'Legal'], summary: 'Template for preparing your witness statement for Hague Convention court proceedings.',
+            fullText: `WITNESS STATEMENT — HAGUE CONVENTION PROCEEDINGS\n\n[Adapt this to your jurisdiction and lawyer's advice]\n\nIN THE [COURT NAME]\nCASE NUMBER: [Number]\n\nBETWEEN:\n[Your Name] — Applicant\nand\n[Taking Parent's Name] — Respondent\n\nWITNESS STATEMENT OF [YOUR FULL NAME]\n\nI, [Full Name], of [Address], state as follows:\n\n1. BACKGROUND\nI am the [mother/father] of [Child's Name], born on [Date]. I make this statement in support of my application for the return of [Child's Name] under the Hague Convention 1980.\n\n2. THE FAMILY\n[Describe your family — when you met the other parent, when the child was born, where you lived, etc.]\n\n3. HABITUAL RESIDENCE\n[Describe where the child lived, went to school, had medical care, had friends, etc.]\n[Provide evidence: school records, medical records, address history]\n\n4. CUSTODY RIGHTS\n[Explain your custody rights — by court order, by law, or by agreement]\n[Reference any court orders]\n\n5. THE ABDUCTION\n[Describe in detail what happened — the date, circumstances, how you discovered the child was gone]\n[Be factual and chronological]\n\n6. STEPS TAKEN\n[List every action you took — police report, Central Authority, lawyers, etc., with dates]\n\n7. IMPACT ON THE CHILD\n[Describe how the abduction has affected your child — separation from friends, school disruption, loss of contact with you, etc.]\n\n8. RESPONSE TO ALLEGATIONS\n[If you know the other side's arguments, address them here]\n\n9. UNDERTAKINGS OFFERED\n[List any protective measures you're willing to offer to address concerns]\n\n10. CONCLUSION\nI respectfully request that this Court order the return of [Child's Name] to [Country] pursuant to the Hague Convention 1980.\n\nI believe the facts stated in this witness statement are true.\n\nSigned: _______________\nDate: _______________`
+        },
+        { id: 'kb-25', entryType: 'template', name: 'Interpol Request Template', countryPair: 'Global', resourceType: 'Template',
+            tags: ['Interpol', 'Police', 'International'], summary: 'Template to help police file an Interpol notice for your missing child.',
+            fullText: `INTERPOL NOTICE REQUEST — GIVE TO YOUR LOCAL POLICE\n\n[Note: Only law enforcement can submit Interpol notices. This template helps them do it.]\n\nTo: [Police Officer/Detective Name]\nRe: Request for Interpol Notice — Missing Child (International Parental Abduction)\n\nOfficer,\n\nI am requesting that you submit a request to your Interpol National Central Bureau for one or more of the following:\n\nYELLOW NOTICE (Missing Person):\n- Purpose: To help locate a missing child\n- Child: [Full Name], DOB [Date]\n- Last seen: [Location, Date]\n- Believed to be in: [Country]\n\nDIFFUSION (Alert):\n- A less formal alert circulated to specific countries\n- Faster to issue than a formal notice\n- Can target specific countries where child may be\n\nInformation for the notice:\n- Child: [Name, DOB, Nationality, Passport No., Physical Description]\n- Abductor: [Name, DOB, Nationality, Passport No., Description]\n- Case reference: [Your police report number]\n- Custody order: [Court, Date, Reference]\n- Central Authority reference: [If Hague application filed]\n\nThis request is supported by:\n□ Police report (attached)\n□ Custody order (attached)\n□ Photos of child and abductor (attached)\n□ Passport details (attached)\n\nThank you for your assistance. Time is critical in these cases.\n\n[Your Name]\n[Contact details]`
+        },
+        { id: 'kb-26', entryType: 'template', name: 'Expense Documentation Template', countryPair: 'Global', resourceType: 'Template',
+            tags: ['Expenses', 'Financial', 'Documentation'], summary: 'Template for documenting all case-related expenses for potential restitution claims.',
+            fullText: `CASE EXPENSE DOCUMENTATION LOG\n\nKeep this running log updated. In many jurisdictions, you can claim these costs back.\n\nCASE: [Child's Name] — Recovery Expenses\nSTART DATE: [Date]\n\nCATEGORIES:\n\nLEGAL FEES:\nDate | Description | Law Firm/Lawyer | Amount | Currency | Receipt #\n_____|_____________|________________|________|__________|__________\n     |             |                |        |          |\n\nTRAVEL:\nDate | Description | From-To | Amount | Currency | Receipt #\n_____|_____________|_________|________|__________|__________\n     |             |         |        |          |\n\nTRANSLATION/DOCUMENTS:\nDate | Description | Provider | Amount | Currency | Receipt #\n_____|_____________|__________|________|__________|__________\n     |             |          |        |          |\n\nCOMMUNICATION:\nDate | Description | Amount | Currency | Receipt #\n_____|_____________|________|__________|__________\n     |             |        |          |\n\nINVESTIGATION:\nDate | Description | Provider | Amount | Currency | Receipt #\n_____|_____________|__________|________|__________|__________\n     |             |          |        |          |\n\nOTHER:\nDate | Description | Amount | Currency | Receipt #\n_____|_____________|________|__________|__________\n     |             |        |          |\n\nRUNNING TOTAL: _______________\n\nNOTES:\n- Keep ALL receipts (scan/photograph)\n- Convert foreign currency at the rate on the date of expense\n- Include travel costs (flights, hotels, meals)\n- Include lost income if applicable\n- Courts in some jurisdictions can order the abducting parent to reimburse reasonable costs\n- These records also help with tax deductions in some countries`
+        },
+        { id: 'kb-27', entryType: 'guidance', name: 'Parental Alienation: Recognition and Response', countryPair: 'Global', resourceType: 'Guidance',
+            tags: ['Alienation', 'Psychology', 'Child'], summary: 'How to recognize parental alienation tactics and respond appropriately.',
+            fullText: `PARENTAL ALIENATION IN ABDUCTION CASES\n\nParental alienation is when one parent systematically undermines the child's relationship with the other parent. It is extremely common in abduction cases.\n\nSIGNS OF ALIENATION:\n- Child refuses contact with no clear reason\n- Child repeats adult language about you ("You abandoned us")\n- Child cannot give specific reasons for their hostility\n- Child shows no ambivalence (all negative, no positive memories)\n- Child claims they came to these views independently\n- Child extends hostility to your entire family\n- Child shows guilt about having positive feelings toward you\n\nWHAT THE TAKING PARENT MAY DO:\n- Tell the child you don't love them or have moved on\n- Block communication attempts and say you never called\n- Rewrite history ("Your parent was always absent/abusive")\n- Create a new identity for the child\n- Involve the child in adult conflicts\n- Use the child as a messenger or spy\n- Reward the child for rejecting you\n\nHOW TO RESPOND:\n1. STAY CONSISTENT — Keep trying to make contact\n2. STAY POSITIVE — Never badmouth the other parent to the child\n3. DOCUMENT — Record every blocked call, unreturned message\n4. THERAPY — A child psychologist can help\n5. COURT — Request a psychological evaluation\n6. PATIENCE — Alienation effects can be reversed over time\n\nFOR COURT:\n- Parental alienation is increasingly recognized by courts worldwide\n- Expert evidence from a child psychologist is valuable\n- Your consistent attempts at contact demonstrate your commitment\n- Courts may order therapeutic intervention\n\nREMEMBER: Your child still loves you. What you are seeing is a survival mechanism, not their true feelings.`
+        },
+        { id: 'kb-28', entryType: 'guidance', name: 'Working with the Media', countryPair: 'Global', resourceType: 'Guidance',
+            tags: ['Media', 'Press', 'Public Campaign'], summary: 'When and how to use media coverage strategically in your case.',
+            fullText: `MEDIA AND PUBLIC CAMPAIGNS — STRATEGIC GUIDE\n\nMedia coverage can be a powerful tool, but it must be used strategically.\n\nWHEN MEDIA HELPS:\n- When diplomatic channels are slow\n- When there's political inaction\n- When the other parent is in hiding\n- When you need public support for funding\n- When your country's government needs pressure to act\n\nWHEN MEDIA CAN HURT:\n- Before you've filed legal proceedings\n- If it could endanger the child\n- If the taking parent might go further into hiding\n- If it violates court orders or proceedings\n- If it could prejudice judicial proceedings\n\nRULES:\n1. CONSULT YOUR LAWYER FIRST — Always\n2. CONTROL THE NARRATIVE — Prepare key messages\n3. PROTECT THE CHILD — Never share info that could harm them\n4. BE CONSISTENT — Same message everywhere\n5. STAY DIGNIFIED — Emotional outbursts hurt your case\n\nPREPARATION:\n- Write a press release (1 page, key facts only)\n- Prepare a media kit (photos, timeline, key facts)\n- Designate one spokesperson\n- Practice your talking points\n- Know what you will and won't discuss\n\nWHAT TO SAY:\n- Focus on the child's welfare\n- Describe your efforts to resolve through legal channels\n- Avoid personal attacks on the other parent\n- Emphasize you want what's best for the child\n- Mention the relevant legal framework (Hague Convention)\n\nCHANNELS:\n- Local/national newspapers\n- TV news (local and national)\n- Online media\n- Social media (controlled, strategic)\n- Parliamentary/congressional representatives\n- Podcasts and radio\n\nTIMING IS EVERYTHING: Coordinate with your lawyer and any ongoing legal proceedings.`
+        },
+        { id: 'kb-29', entryType: 'template', name: 'Timeline of Events Template', countryPair: 'Global', resourceType: 'Template',
+            tags: ['Timeline', 'Documentation', 'Court'], summary: 'Structured template for creating a detailed chronological timeline of your case.',
+            fullText: `CASE TIMELINE TEMPLATE\n\nA clear timeline is essential for court proceedings, lawyer consultations, and your own reference.\n\nINSTRUCTIONS:\n- Fill in every date you can remember\n- Include source/evidence for each entry\n- Keep this updated as events unfold\n- Share with your lawyer\n\nDate | Event | Evidence/Source | Notes\n_____|_______|________________|______\n\nSECTION 1: BACKGROUND\n[Date] | Met [other parent] | — | Location, circumstances\n[Date] | Child born | Birth certificate | Hospital, country\n[Date] | Marriage/partnership | Marriage cert | Location\n[Date] | Custody order obtained | Court order | Court name, case #\n[Date] | First signs of risk | [describe] | Messages, behavior\n\nSECTION 2: THE ABDUCTION\n[Date] | Last saw child | — | Location, circumstances\n[Date] | Discovered child was gone | [describe] | How you found out\n[Date] | Last communication with taking parent | Screenshot | What was said\n\nSECTION 3: RESPONSE\n[Date] | Filed police report | Report # | Station, officer\n[Date] | Contacted lawyer | — | Lawyer name, firm\n[Date] | Filed Hague application | Reference # | Central Authority\n[Date] | Contacted embassy | — | Response received\n[Date] | [Other actions taken] | | \n\nSECTION 4: ONGOING\n[Date] | Central Authority update | Email/letter | Status\n[Date] | Court hearing | Court records | Outcome\n[Date] | Contact with child | Log | Duration, method\n[Date] | [Continuing events] | | \n\nTIPS:\n- Be precise with dates (not "around March")\n- Attach evidence to each entry where possible\n- Note any missed deadlines by authorities\n- Record emotional state only in personal notes, not this timeline`
+        },
+        { id: 'kb-30', entryType: 'guidance', name: 'Understanding Habitual Residence', countryPair: 'Global', resourceType: 'Guidance',
+            tags: ['Legal', 'Habitual Residence', 'Key Concept'], summary: 'The concept of habitual residence is the foundation of every Hague case. Understanding it is critical.',
+            fullText: `HABITUAL RESIDENCE — THE KEY LEGAL CONCEPT\n\nThe entire Hague Convention revolves around one question: where was the child habitually resident before the abduction?\n\nWHAT IT MEANS:\n- Where the child had their settled, regular life\n- Not just where they were physically present\n- Considers: duration, stability, family ties, schooling, social connections\n- It's about the CHILD's connection, not just the parents'\n\nHOW COURTS DETERMINE IT:\n1. Duration of residence (usually several months minimum)\n2. Child's integration into the community\n3. School enrollment and attendance\n4. Medical/dental care received there\n5. Social connections (friends, activities)\n6. Parents' intentions when they moved there\n7. Housing stability\n8. Both parents' connections to the place\n\nSTRONG EVIDENCE OF HABITUAL RESIDENCE:\n- School records\n- Medical/dental records\n- Lease or mortgage documents\n- Utility bills\n- Tax returns\n- Employment records\n- Child's activity registrations (sports, music, etc.)\n- Statements from school staff, neighbors, family doctor\n- Photos and videos showing daily life\n- Social media posts showing settled life\n\nCOMMON DISPUTES:\n- "We were only visiting" vs. "We had moved there"\n- Dual habitual residence (courts generally reject this)\n- "Habitual residence had already changed" (the taking parent's argument)\n- Short periods of residence (can still establish habitual residence)\n\nWHY IT MATTERS:\n- If the child was NOT habitually resident in your country, the Hague Convention may not apply\n- The taking parent will often argue the child's habitual residence had shifted\n- Strong evidence of habitual residence is your best weapon\n\nPREPARE THIS EVIDENCE EARLY — it's the foundation of your entire case.`
+        },
+        { id: 'kb-31', entryType: 'template', name: 'MP/Congressional Representative Letter', countryPair: 'Global', resourceType: 'Template',
+            tags: ['Government', 'Political', 'Advocacy'], summary: 'Template for writing to your elected representative about your international child abduction case.',
+            fullText: `LETTER TO ELECTED REPRESENTATIVE\n\n[Your Name]\n[Your Address]\n[Your Constituency/District]\n[Date]\n\nDear [Title] [Name],\n\nI am writing as your constituent to request your urgent assistance with an international child abduction case.\n\nMY SITUATION:\nMy [son/daughter], [Child's Name], aged [age], was wrongfully [taken to / retained in] [Country] by [their mother/father] on [Date]. [He/She] has been there for [duration] and I have been unable to [see them / speak with them] since [date].\n\nWHAT I HAVE DONE:\n- Filed a police report (Case No. [Number])\n- Applied under the Hague Convention through [Central Authority] (Ref: [Number])\n- Engaged lawyers in both [Your Country] and [Destination Country]\n- Contacted the [Embassy/Consulate] in [City]\n\nTHE PROBLEM:\n[Describe the specific obstacle — slow Central Authority, uncooperative foreign government, lack of enforcement, etc.]\n\nWHAT I AM ASKING:\n1. A letter from your office to [the Central Authority / Foreign Ministry / Embassy] expressing concern about the pace of action\n2. A question raised in [Parliament / Congress] about the government's response to international child abduction\n3. Assistance in arranging a meeting with the relevant Minister or department\n4. Your office's support in communicating with the [Destination Country] government\n\nWHY THIS MATTERS:\n[Brief, emotional but controlled paragraph about impact on you and your child]\n\nI have enclosed a summary of my case with key documents. I am available to meet or discuss this at your earliest convenience.\n\nThank you for your attention to this matter.\n\nYours sincerely,\n[Your Name]\n[Contact details]\n\nEnclosures:\n- Case summary (1 page)\n- Timeline of events\n- Photos of [Child's Name]`
+        },
+        { id: 'kb-32', entryType: 'guidance', name: 'After the Return: What to Expect', countryPair: 'Global', resourceType: 'Guidance',
+            tags: ['Return', 'Recovery', 'After'], summary: 'What happens after your child is returned — the legal and emotional journey continues.',
+            fullText: `AFTER THE RETURN — WHAT TO EXPECT\n\nGetting your child back is not the end. It's a new chapter.\n\nIMMEDIATE PRIORITIES:\n\n1. SAFETY AND STABILITY\n- Establish a safe, calm environment\n- Return to familiar routines as much as possible\n- Don't overwhelm the child with questions\n- Let them adjust at their own pace\n\n2. LEGAL NEXT STEPS\n- A Hague return is NOT a custody order\n- You need to apply for custody in your home courts\n- The other parent may still have rights\n- Ensure passport security measures remain in place\n- Consider whether criminal charges are appropriate\n\n3. PSYCHOLOGICAL SUPPORT\n- Arrange therapy for your child immediately\n- A child psychologist experienced in abduction/reunification\n- You also need support — consider therapy for yourself\n- Family therapy may be appropriate later\n\nWHAT YOUR CHILD MAY EXPERIENCE:\n- Confusion and mixed loyalty\n- Anger (at you, at the other parent, at the situation)\n- Grief for the life they left behind\n- Fear about the future\n- Difficulty trusting either parent\n- Language or cultural readjustment\n- Academic challenges\n- Sleep disruption, behavioral changes\n\nWHAT NOT TO DO:\n- Don't badmouth the other parent\n- Don't interrogate about what happened\n- Don't celebrate their return as a "victory"\n- Don't deny the child's feelings about the other parent\n- Don't assume everything will immediately be normal\n\nRE-ABDUCTION PREVENTION:\n- Secure passports\n- Update court orders\n- Inform school and childcare\n- Consider supervised contact initially\n- Maintain vigilance\n\nREMEMBER:\n- Recovery takes time — months, sometimes years\n- Your child needs both parents (in most cases)\n- Professional help is essential, not optional\n- You've fought incredibly hard — now focus on healing`
+        },
+        { id: 'kb-33', entryType: 'guidance', name: 'Understanding Hague Convention Exceptions', countryPair: 'Global', resourceType: 'Guidance',
+            tags: ['Legal', 'Hague', 'Exceptions', 'Defenses'], summary: 'Complete guide to all exceptions under which a Hague Convention return can be refused.',
+            fullText: `HAGUE CONVENTION EXCEPTIONS — COMPLETE GUIDE\n\nThese are the ONLY reasons a court can refuse to order return:\n\n1. ARTICLE 12 — CHILD IS SETTLED\n- If more than 1 year has passed since the abduction AND\n- The child is now settled in their new environment\n- This is why SPEED is critical — file within 1 year\n- "Settled" means integrated into school, community, social life\n- Courts look at this strictly — mere presence is not enough\n\n2. ARTICLE 13(a) — NO CUSTODY RIGHTS OR CONSENT\n- You were not actually exercising custody rights at the time\n- OR you consented to the removal\n- OR you acquiesced after the removal\n- DEFENSE: Show you were actively parenting\n- DEFENSE: Show you never consented (or withdrew consent)\n- WARNING: Delayed action can look like acquiescence\n\n3. ARTICLE 13(b) — GRAVE RISK\n- Return would expose child to physical/psychological harm\n- OR place child in an intolerable situation\n- This is the MOST common defense raised\n- The threshold is HIGH — not just \"better off\" staying\n- Courts increasingly expect \"undertakings\" to address concerns\n- See the separate guide on Article 13(b) defenses\n\n4. ARTICLE 13 — CHILD'S OBJECTIONS\n- The child objects to return AND\n- The child has attained an age and degree of maturity\n- No fixed age — varies by jurisdiction (often 10-12+)\n- The child must have genuine, independent views\n- Courts are cautious about coaching/alienation\n\n5. ARTICLE 20 — FUNDAMENTAL RIGHTS\n- Return would violate fundamental human rights principles\n- Extremely rarely invoked\n- Not about best interests — about fundamental principles\n\nKEY POINTS:\n- The burden of proof is on the person opposing return\n- Exceptions are to be interpreted NARROWLY\n- Best interests of the child is NOT a ground for refusal\n- Return is the DEFAULT — exceptions are exactly that`
+        },
+        { id: 'kb-34', entryType: 'template', name: 'Emergency Passport Block Request', countryPair: 'Global', resourceType: 'Template',
+            tags: ['Passport', 'Emergency', 'Prevention'], summary: 'Template for requesting emergency measures to prevent a child\'s passport being used for travel.',
+            fullText: `EMERGENCY PASSPORT BLOCK REQUEST\n\n[Adapt to your country's passport authority]\n\n[Your Name]\n[Your Address]\n[Date]\n\nTo: [Passport Authority Name]\n[Address]\n\nURGENT — REQUEST FOR PASSPORT ALERT / BLOCK\n\nRe: [Child's Full Name], DOB [Date]\nPassport Number: [Number] (if known)\nNationality: [Nationality]\n\nDear Sir/Madam,\n\nI am the [mother/father] of the above-named child and I am requesting URGENT action to prevent this passport from being used for international travel.\n\nSITUATION:\nMy child has been wrongfully [taken abroad / I believe they are about to be taken abroad] by [Taking Parent's Name] without my consent.\n\nI REQUEST:\n1. An immediate alert/flag on my child's passport\n2. Prevention of any new passport being issued to my child without my written consent\n3. Notification if any attempt is made to use or renew this passport\n4. If possible, revocation of the current passport\n\nSUPPORTING DOCUMENTS:\n□ Custody order (attached)\n□ Police report (attached)\n□ My identification (attached)\n□ Child's birth certificate (attached)\n\nLEGAL BASIS:\n[Cite relevant law in your country — e.g., in many countries both parents must consent to passport issuance for a minor]\n\nIF THE CHILD HAS DUAL NATIONALITY:\nPlease note my child may also hold a [Country] passport. I am making a separate request to [that country's passport authority].\n\nThis matter is urgent. Every hour matters.\n\nContact me immediately at [phone] and [email].\n\nYours urgently,\n[Your Name]\n[Signature]`
+        },
+        { id: 'kb-35', entryType: 'guidance', name: 'Hague vs Non-Hague: Know Your Situation', countryPair: 'Global', resourceType: 'Guidance',
+            tags: ['Hague', 'Non-Hague', 'Decision Tree'], summary: 'Quick guide to determine whether the Hague Convention applies to your situation.',
+            fullText: `IS THE HAGUE CONVENTION APPLICABLE TO YOUR CASE?\n\nAnswer these questions:\n\n1. Is the destination country a Hague Convention signatory?\n   → Check: https://www.hcch.net/en/instruments/conventions/status-table/?cid=24\n   → If NO → Non-Hague strategy needed (see Non-Hague Country Strategy guide)\n   → If YES → Continue\n\n2. Is YOUR country also a signatory?\n   → If NO → The Convention doesn't apply between your two countries\n   → If YES → Continue\n\n3. Has the destination country accepted YOUR country's accession?\n   → Some countries have signed but don't accept all other signatories\n   → Check the status table above\n   → If NO → The Convention doesn't apply between your two countries\n   → If YES → Continue\n\n4. Was the child habitually resident in YOUR country before the abduction?\n   → If NO → You may not have standing under the Convention\n   → If YES → Continue\n\n5. Did you have custody rights under the law of your country?\n   → This can be by court order, by operation of law, or by agreement\n   → If NO → You may not have standing\n   → If YES → Continue\n\n6. Were you exercising those custody rights?\n   → Active parenting, not just legal rights on paper\n   → If YES → You likely have a strong Hague case\n\n7. Has more than one year passed since the abduction?\n   → If NO → File immediately, strongest position\n   → If YES → You can still file, but the \"settled\" defense becomes available\n\nIF THE HAGUE APPLIES:\n→ File immediately through your Central Authority\n→ Get lawyers in both countries\n→ Time is your enemy\n\nIF THE HAGUE DOESN'T APPLY:\n→ See Non-Hague Country Strategy guide\n→ Diplomatic, criminal, and local legal options\n→ More complex but not hopeless`
         }
     ];
+
+    // Merge in advanced templates from the templates file (deduplicate by ID)
+    const seedIds = new Set(seedData.map(e => e.id));
+    const advancedTemplates = knowledgeBaseTemplates
+        .filter(t => !seedIds.has(t.id))
+        .map(t => ({ ...t, entryType: t.entryType as KnowledgeBaseEntry['entryType'] }));
+    const allSeedData: KnowledgeBaseEntry[] = [...seedData, ...advancedTemplates];
 
     useEffect(() => {
         // Try to fetch from Cloud Firestore first (Restoring "Lost" Knowledge)
@@ -1743,13 +1920,13 @@ const KnowledgeBaseBuilder: React.FC = () => {
                 const snap = await getDocs(q);
                 if (!snap.empty) {
                     const cloudEntries = snap.docs.map(d => ({ id: d.id, ...d.data() } as KnowledgeBaseEntry));
-                    setEntries([...seedData, ...cloudEntries]); // Combine seed + cloud
+                    setEntries([...allSeedData, ...cloudEntries]); // Combine seed + cloud
                 } else {
-                    setEntries(seedData);
+                    setEntries(allSeedData);
                 }
             } catch (e) {
                 console.warn("Offline or no KB permissions", e);
-                setEntries(seedData);
+                setEntries(allSeedData);
             }
         };
         fetchEntries();
@@ -1761,7 +1938,7 @@ const KnowledgeBaseBuilder: React.FC = () => {
         if (!auth.currentUser) { alert("Please sign in to save templates to the cloud."); return; }
         try {
             const batch = writeBatch(db);
-            seedData.forEach(e => {
+            allSeedData.forEach(e => {
                 const ref = doc(collection(db, 'knowledgeBaseEntries'));
                 batch.set(ref, e);
             });
@@ -1783,7 +1960,7 @@ const KnowledgeBaseBuilder: React.FC = () => {
                     <div key={entry.id} className="dossier-card" style={{ minHeight: '180px', cursor: 'pointer' }} onClick={() => setSelectedEntry(entry)}>
                         <div className="section-header">{entry.resourceType}</div>
                         <h4 style={{ margin: '0.5rem 0' }}>{entry.name}</h4>
-                        <p style={{ fontSize: '0.85rem', color: '#555' }}>{entry.summary}</p>
+                        <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{entry.summary}</p>
                         <div style={{ display: 'flex', gap: '0.5rem', marginTop: 'auto', flexWrap: 'wrap' }}>
                             {entry.tags?.map(t => <span key={t} className="journal-badge" style={{ fontSize: '0.65rem' }}>{t}</span>)}
                         </div>
@@ -1798,7 +1975,7 @@ const KnowledgeBaseBuilder: React.FC = () => {
                             <h3>{selectedEntry.name}</h3>
                             <button className="tour-close" onClick={() => setSelectedEntry(null)}>×</button>
                         </div>
-                        <div style={{ whiteSpace: 'pre-wrap', fontFamily: 'monospace', backgroundColor: '#f5f5f5', padding: '1rem', borderRadius: '8px', marginBottom: '1rem' }}>
+                        <div style={{ whiteSpace: 'pre-wrap', fontFamily: 'monospace', backgroundColor: 'var(--surface-raised)', padding: '1rem', borderRadius: '8px', marginBottom: '1rem' }}>
                             {selectedEntry.fullText || "Content preview not available in offline mode."}
                         </div>
                         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem' }}>
@@ -1910,13 +2087,13 @@ const ExpensesTracker: React.FC = () => {
             <div style={{ marginTop: '2rem' }}>
                 <h3>Total: ${total.toFixed(2)}</h3>
                 {expenses.length === 0 && (
-                    <div style={{ textAlign: 'center', padding: '2rem', color: '#666', backgroundColor: '#f8f9fa', borderRadius: '8px' }}>
+                    <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-secondary)', backgroundColor: 'var(--surface-raised)', borderRadius: '8px' }}>
                         <p style={{ fontSize: '0.95rem' }}>Log every dollar you spend — legal fees, flights, hotels, translators, private investigators. Under the Hague Convention, you may be able to claim restitution for these costs. The more detailed your records, the stronger your claim.</p>
                     </div>
                 )}
                 <table style={{ width: '100%', textAlign: 'left', borderCollapse: 'collapse' }}>
                     <thead>
-                        <tr style={{ borderBottom: '2px solid #eee' }}>
+                        <tr style={{ borderBottom: '2px solid var(--border-default)' }}>
                             <th style={{ padding: '0.5rem' }}>Date</th>
                             <th style={{ padding: '0.5rem' }}>Desc</th>
                             <th style={{ padding: '0.5rem' }}>Cat</th>
@@ -1926,7 +2103,7 @@ const ExpensesTracker: React.FC = () => {
                     </thead>
                     <tbody>
                         {expenses.map(e => (
-                            <tr key={e.id} style={{ borderBottom: '1px solid #f0f0f0' }}>
+                            <tr key={e.id} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
                                 <td style={{ padding: '0.5rem' }}>{e.date}</td>
                                 <td style={{ padding: '0.5rem' }}>{e.description}</td>
                                 <td style={{ padding: '0.5rem' }}>{e.category}</td>
@@ -2336,9 +2513,9 @@ BEHAVIOR:
     return (
         <div style={{ maxWidth: '700px', margin: '0 auto' }}>
             <h2>Talk to AI</h2>
-            <p style={{ color: '#666', marginBottom: '1rem' }}>Tell me what's happening. I can add tasks, log evidence, save contacts, and track expenses — just by listening.</p>
+            <p style={{ color: 'var(--text-secondary)', marginBottom: '1rem' }}>Tell me what's happening. I can add tasks, log evidence, save contacts, and track expenses — just by listening.</p>
 
-            <canvas ref={canvasRef} className="audio-visualizer" width="600" height="80" style={{ borderRadius: '12px', border: '1px solid #e2e8f0' }}></canvas>
+            <canvas ref={canvasRef} className="audio-visualizer" width="600" height="80" style={{ borderRadius: '12px', border: '1px solid var(--border-default)' }}></canvas>
 
             <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1rem', flexWrap: 'wrap' }}>
                 {!connected ? (
@@ -2367,14 +2544,14 @@ BEHAVIOR:
 
             {/* Status log */}
             {logs.length > 0 && (
-                <div style={{ marginTop: '0.75rem', fontSize: '0.8rem', color: '#999' }}>
+                <div style={{ marginTop: '0.75rem', fontSize: '0.8rem', color: 'var(--text-tertiary)' }}>
                     {logs.slice(-3).map((l, i) => <div key={i}>{l}</div>)}
                 </div>
             )}
 
             {connected && (
-                <div style={{ marginTop: '1.25rem', padding: '0.75rem', background: '#f8fafc', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
-                    <div style={{ fontSize: '0.7rem', color: '#999', marginBottom: '0.5rem' }}>Try saying:</div>
+                <div style={{ marginTop: '1.25rem', padding: '0.75rem', background: 'var(--surface-raised)', borderRadius: '10px', border: '1px solid var(--border-default)' }}>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)', marginBottom: '0.5rem' }}>Try saying:</div>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
                         {[
                             "I just spoke with my lawyer",
@@ -2383,7 +2560,7 @@ BEHAVIOR:
                             "I spent $500 on legal fees",
                             "What should I do next?"
                         ].map((s, i) => (
-                            <span key={i} style={{ fontSize: '0.75rem', padding: '0.25rem 0.6rem', background: '#e2e8f0', borderRadius: '100px', color: '#475569' }}>{s}</span>
+                            <span key={i} style={{ fontSize: '0.75rem', padding: '0.25rem 0.6rem', background: 'var(--surface-active)', borderRadius: '100px', color: 'var(--text-secondary)' }}>{s}</span>
                         ))}
                     </div>
                 </div>
@@ -2493,11 +2670,11 @@ const CorrespondenceHelper: React.FC<{ profile: CaseProfile }> = ({ profile }) =
                      <textarea placeholder="Paste the email you received, or describe what you want to say..." value={context} onChange={e => setContext(e.target.value)} rows={4} />
                 </div>
 
-                <div className="full-width" style={{ display: 'flex', flexDirection: 'column', gap: '1rem', padding: '1rem', backgroundColor: '#f8f9fa', borderRadius: '8px' }}>
+                <div className="full-width" style={{ display: 'flex', flexDirection: 'column', gap: '1rem', padding: '1rem', backgroundColor: 'var(--surface-raised)', borderRadius: '8px' }}>
                     <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
                         <input type="checkbox" checked={includeOverview} onChange={e => setIncludeOverview(e.target.checked)} /> 
                         <strong>Include Case Overview?</strong> 
-                        <span style={{ fontSize: '0.8rem', color: '#666' }}>(Auto-adds: "{profile.childName} was taken on...")</span>
+                        <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>(Auto-adds: "{profile.childName} was taken on...")</span>
                     </label>
                     
                     <div>
@@ -2705,7 +2882,7 @@ const CaseSettings: React.FC<{ profile: CaseProfile, setProfile: (p: CaseProfile
         <div className="tool-card" style={{ cursor: 'default' }}>
             <h2>Case Profile & Settings</h2>
             
-            <div className="form-grid" style={{ marginBottom: '2rem', paddingBottom: '2rem', borderBottom: '1px solid #eee' }}>
+            <div className="form-grid" style={{ marginBottom: '2rem', paddingBottom: '2rem', borderBottom: '1px solid var(--border-default)' }}>
                 <div>
                     <label>Child's Name</label>
                     <input type="text" value={editProfile.childName} onChange={e => setEditProfile({...editProfile, childName: e.target.value})} />
@@ -2735,20 +2912,103 @@ const CaseSettings: React.FC<{ profile: CaseProfile, setProfile: (p: CaseProfile
             </div>
 
             <h3>Case IDs</h3>
-            <div className="form-grid" style={{ marginBottom: '2rem', paddingBottom: '2rem', borderBottom: '1px solid #eee' }}>
+            <div className="form-grid" style={{ marginBottom: '2rem', paddingBottom: '2rem', borderBottom: '1px solid var(--border-default)' }}>
                 <input type="text" placeholder="Agency (e.g. FBI)" value={newKey} onChange={e => setNewKey(e.target.value)} />
                 <input type="text" placeholder="Case Number" value={newVal} onChange={e => setNewVal(e.target.value)} />
                 <button className="button-secondary" onClick={addNum}>Add ID</button>
                 <div className="id-list full-width">
                     {Object.entries(nums).map(([k, v]) => (
-                        <div key={k} style={{ padding: '0.5rem', borderBottom: '1px solid #eee' }}><strong>{k}:</strong> {v}</div>
+                        <div key={k} style={{ padding: '0.5rem', borderBottom: '1px solid var(--border-default)' }}><strong>{k}:</strong> {v}</div>
                     ))}
                 </div>
             </div>
 
             <h3>Data Management</h3>
+            <div style={{ padding: '1.25rem', backgroundColor: 'var(--surface-raised)', borderRadius: '8px', border: '1px solid var(--border-subtle)', marginBottom: '1rem' }}>
+                <h4 style={{ marginTop: 0 }}>📦 Backup & Restore</h4>
+                <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>Download everything — case profile, action plan, timeline, expenses, contacts, and uploaded documents — as a single backup file.</p>
+                <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1rem', flexWrap: 'wrap' }}>
+                    <button className="button-primary" onClick={async () => {
+                        try {
+                            const localData: Record<string, any> = {};
+                            for (let i = 0; i < localStorage.length; i++) {
+                                const key = localStorage.key(i);
+                                if (key) {
+                                    try { localData[key] = JSON.parse(localStorage.getItem(key)!); }
+                                    catch { localData[key] = localStorage.getItem(key); }
+                                }
+                            }
+                            let vaultMetadata: VaultDocument[] = [];
+                            try { vaultMetadata = await getFilesFromLocalVault(); } catch {}
+                            const vaultFiles: { id: string; name: string; dataUrl: string }[] = [];
+                            try {
+                                const idb = await openVaultDB();
+                                const tx = idb.transaction(STORE_NAME, 'readonly');
+                                const store = tx.objectStore(STORE_NAME);
+                                const allReq = store.getAll();
+                                await new Promise<void>((resolve, reject) => {
+                                    allReq.onsuccess = () => {
+                                        const records = allReq.result;
+                                        let pending = records.filter((r: any) => r.fileBlob).length;
+                                        if (pending === 0) { resolve(); return; }
+                                        records.forEach((rec: any) => {
+                                            if (rec.fileBlob) {
+                                                const reader = new FileReader();
+                                                reader.onload = () => { vaultFiles.push({ id: rec.id, name: rec.name, dataUrl: reader.result as string }); pending--; if (pending === 0) resolve(); };
+                                                reader.readAsDataURL(rec.fileBlob);
+                                            }
+                                        });
+                                    };
+                                    allReq.onerror = () => reject(allReq.error);
+                                });
+                            } catch {}
+                            const exportData = { version: '0.2.0', exportDate: new Date().toISOString(), localStorage: localData, vaultMetadata, vaultFiles };
+                            const blob = new Blob([JSON.stringify(exportData)], { type: 'application/json' });
+                            const url = URL.createObjectURL(blob);
+                            const a = document.createElement('a');
+                            a.href = url;
+                            a.download = `RecoveryHub_Backup_${new Date().toISOString().split('T')[0]}.json`;
+                            a.click();
+                            URL.revokeObjectURL(url);
+                            alert('Backup downloaded! Save this file somewhere safe.');
+                        } catch (err) { console.error(err); alert('Export failed. Try again.'); }
+                    }}>⬇️ Download Full Backup (JSON)</button>
+                    <div>
+                        <input type="file" id="settings-import-backup" accept=".json" style={{ display: 'none' }} onChange={async (e) => {
+                            const file = e.target.files?.[0];
+                            if (!file) return;
+                            if (!confirm("This will REPLACE all current data with the backup. Are you sure?")) return;
+                            try {
+                                const text = await file.text();
+                                const data = JSON.parse(text);
+                                if (!data.version || !data.localStorage) { alert('Invalid backup file.'); return; }
+                                Object.entries(data.localStorage).forEach(([key, value]) => {
+                                    localStorage.setItem(key, typeof value === 'string' ? value : JSON.stringify(value));
+                                });
+                                if (data.vaultFiles && data.vaultFiles.length > 0) {
+                                    const idb = await openVaultDB();
+                                    for (const vf of data.vaultFiles) {
+                                        try {
+                                            const resp = await fetch(vf.dataUrl);
+                                            const blob = await resp.blob();
+                                            const meta = data.vaultMetadata?.find((m: any) => m.id === vf.id) || {};
+                                            const tx = idb.transaction(STORE_NAME, 'readwrite');
+                                            tx.objectStore(STORE_NAME).put({ ...meta, id: vf.id, name: vf.name, fileBlob: blob });
+                                        } catch {}
+                                    }
+                                }
+                                alert('Import complete! Reloading...');
+                                setTimeout(() => window.location.reload(), 500);
+                            } catch (err) { console.error(err); alert('Import failed. The file may be corrupted.'); }
+                        }} />
+                        <label htmlFor="settings-import-backup" className="button-secondary" style={{ cursor: 'pointer', display: 'inline-block' }}>⬆️ Import Backup File</label>
+                    </div>
+                </div>
+                <p style={{ fontSize: '0.8rem', color: 'var(--text-tertiary)', marginTop: '0.75rem' }}>Note: Very large files (40MB+ PDFs) may make the backup file big. The backup includes your actual documents.</p>
+            </div>
+
             <div style={{ padding: '1rem', border: '1px solid #ffccbc', backgroundColor: '#fff3e0', borderRadius: '8px' }}>
-                <h4 style={{ color: '#d84315', marginTop: 0 }}>Danger Zone</h4>
+                <h4 style={{ color: '#d84315', marginTop: 0 }}>⚠️ Danger Zone</h4>
                 <p>This will permanently delete all Case Profiles, Journals, and Checklists stored on this browser.</p>
                 <button className="button-danger" onClick={clearData}>Wipe All Local Data</button>
             </div>
@@ -2911,7 +3171,7 @@ const CampaignSiteBuilder: React.FC<{ profile: CaseProfile }> = ({ profile }) =>
                     <h2>Site Preview</h2>
                     <button className="button-secondary" onClick={() => setShowPreview(false)}>Close Preview</button>
                 </div>
-                <div style={{ border: '1px solid #ccc', borderRadius: '8px', overflow: 'hidden', height: '600px', overflowY: 'scroll' }}>
+                <div style={{ border: '1px solid var(--border-default)', borderRadius: '8px', overflow: 'hidden', height: '600px', overflowY: 'scroll' }}>
                     <PublicCampaignViewer id="PREVIEW" previewData={previewData} />
                 </div>
             </div>
@@ -2951,14 +3211,14 @@ const CampaignSiteBuilder: React.FC<{ profile: CaseProfile }> = ({ profile }) =>
             </div>
             <div style={{ marginTop: '0.5rem' }}>
                 {links.map((l, i) => (
-                    <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.5rem', backgroundColor: '#f0f0f0', marginBottom: '0.25rem', borderRadius: '4px' }}>
+                    <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.5rem', backgroundColor: 'var(--surface-raised)', marginBottom: '0.25rem', borderRadius: '4px' }}>
                         <span>{l.label}</span>
                         <button onClick={() => handleRemoveLink(i)} style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'red' }}>x</button>
                     </div>
                 ))}
             </div>
 
-             <p style={{marginTop: '1.5rem', fontSize: '0.85rem', color: '#666'}}>
+             <p style={{marginTop: '1.5rem', fontSize: '0.85rem', color: 'var(--text-secondary)'}}>
                 <strong>Note:</strong> To include a Case Timeline on your public site, go to the "Evidence" tab and toggle specific events to "Public" (Green Globe).
             </p>
 
@@ -3045,7 +3305,7 @@ const PublicCampaignViewer: React.FC<{ id: string, previewData?: any }> = ({ id,
 
                 <h1 className="missing-name">{data.childName}</h1>
                 
-                {data.missingCaseNumber && <div style={{ textAlign: 'center', fontSize: '1.2rem', fontWeight: 'bold', marginBottom: '1rem', color: '#555' }}>CASE #: {data.missingCaseNumber}</div>}
+                {data.missingCaseNumber && <div style={{ textAlign: 'center', fontSize: '1.2rem', fontWeight: 'bold', marginBottom: '1rem', color: 'var(--text-secondary)' }}>CASE #: {data.missingCaseNumber}</div>}
 
                 <div className="missing-details-bar">
                      <div><strong>MISSING FROM:</strong><br/>{data.fromCountry}</div>
@@ -3067,12 +3327,12 @@ const PublicCampaignViewer: React.FC<{ id: string, previewData?: any }> = ({ id,
 
                 {/* PUBLIC TIMELINE */}
                 {data.timeline && data.timeline.length > 0 && (
-                    <div style={{ margin: '2rem 0', textAlign: 'left', borderTop: '2px solid #eee', paddingTop: '2rem' }}>
-                        <h3 style={{ textAlign: 'center', textTransform: 'uppercase', color: '#333', marginBottom: '1.5rem' }}>Case Timeline</h3>
+                    <div style={{ margin: '2rem 0', textAlign: 'left', borderTop: '2px solid var(--border-default)', paddingTop: '2rem' }}>
+                        <h3 style={{ textAlign: 'center', textTransform: 'uppercase', color: 'var(--text-primary)', marginBottom: '1.5rem' }}>Case Timeline</h3>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                             {data.timeline.map((t: any, i: number) => (
                                 <div key={i} style={{ display: 'flex', gap: '1rem', borderLeft: '3px solid #d32f2f', paddingLeft: '1rem' }}>
-                                    <div style={{ fontWeight: 'bold', minWidth: '100px', fontSize: '0.9rem', color: '#555' }}>{t.date}</div>
+                                    <div style={{ fontWeight: 'bold', minWidth: '100px', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>{t.date}</div>
                                     <div>
                                         <div style={{ fontWeight: 'bold', textTransform: 'uppercase', fontSize: '0.85rem' }}>{t.title}</div>
                                         <div style={{ fontSize: '0.95rem' }}>{t.description}</div>
@@ -3239,9 +3499,9 @@ const DataManagement: React.FC = () => {
             <h2>Data Management</h2>
             <p>Your data is stored in this browser on this device. Use these tools to back it up or move it.</p>
 
-            <div style={{ marginTop: '1.5rem', padding: '1.25rem', backgroundColor: '#f8f9fa', borderRadius: '8px', border: '1px solid rgba(0,0,0,0.06)' }}>
+            <div style={{ marginTop: '1.5rem', padding: '1.25rem', backgroundColor: 'var(--surface-raised)', borderRadius: '8px', border: '1px solid var(--border-subtle)' }}>
                 <h3 style={{ marginTop: 0 }}>📦 Backup & Restore</h3>
-                <p style={{ fontSize: '0.9rem', color: '#555' }}>Download everything — case profile, action plan, timeline, expenses, contacts, and uploaded documents — as a single backup file. Import it on any device to pick up where you left off.</p>
+                <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>Download everything — case profile, action plan, timeline, expenses, contacts, and uploaded documents — as a single backup file. Import it on any device to pick up where you left off.</p>
                 <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1rem', flexWrap: 'wrap' }}>
                     <button className="button-primary" onClick={handleExport} disabled={exporting}>
                         {exporting ? 'Preparing backup...' : '⬇️ Download Full Backup'}
@@ -3253,8 +3513,8 @@ const DataManagement: React.FC = () => {
                         </label>
                     </div>
                 </div>
-                {importStatus && <p style={{ fontSize: '0.85rem', color: '#1e3a5f', marginTop: '0.5rem' }}>{importStatus}</p>}
-                <p style={{ fontSize: '0.8rem', color: '#888', marginTop: '0.75rem' }}>Note: Very large files (40MB+ PDFs) may make the backup file big. The backup includes your actual documents so nothing is lost.</p>
+                {importStatus && <p style={{ fontSize: '0.85rem', color: 'var(--accent)', marginTop: '0.5rem' }}>{importStatus}</p>}
+                <p style={{ fontSize: '0.8rem', color: 'var(--text-tertiary)', marginTop: '0.75rem' }}>Note: Very large files (40MB+ PDFs) may make the backup file big. The backup includes your actual documents so nothing is lost.</p>
             </div>
 
             <div style={{ marginTop: '1.5rem', padding: '1.25rem', border: '1px solid #ffccbc', backgroundColor: '#fff3e0', borderRadius: '8px' }}>
@@ -3370,7 +3630,7 @@ const OnboardingWizard: React.FC<{ onComplete: (p: CaseProfile) => void, onPreve
                             <option value="sole-custody-them-local">They have Sole Custody (Retained/Taken by Custodial Parent)</option>
                             <option value="other">Other / Unclear</option>
                          </select>
-                         <p style={{fontSize: '0.8rem', color: '#666', marginTop: '0.2rem'}}>Select the status in the country the child was taken FROM.</p>
+                         <p style={{fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.2rem'}}>Select the status in the country the child was taken FROM.</p>
                     </div>
                     
                     <div className="full-width" style={{marginTop: '1rem', display: 'flex', gap: '1rem'}}>
@@ -3437,12 +3697,12 @@ const OnboardingWizard: React.FC<{ onComplete: (p: CaseProfile) => void, onPreve
                         </div>
 
                         <label>Upload Key Documents (Optional)</label>
-                        <p style={{fontSize: '0.9rem', color: '#666'}}>Court orders or police reports will be analyzed and saved to your Vault.</p>
+                        <p style={{fontSize: '0.9rem', color: 'var(--text-secondary)'}}>Court orders or police reports will be analyzed and saved to your Vault.</p>
                         <input type="file" onChange={handleDocUpload} accept=".pdf,image/*" style={{ marginBottom: '0.5rem' }} />
-                        {analyzingDoc && <div style={{ fontSize: '0.8rem', color: '#1e3a5f' }}>Analyzing document... please wait...</div>}
+                        {analyzingDoc && <div style={{ fontSize: '0.8rem', color: 'var(--accent)' }}>Analyzing document... please wait...</div>}
                     
                         <label style={{marginTop: '1rem', display: 'block'}}>Is there anything else?</label>
-                        <p style={{fontSize: '0.9rem', color: '#666'}}>Context affects strategy (e.g., "Child has medical needs," "History of domestic violence," "Abductor has dual citizenship").</p>
+                        <p style={{fontSize: '0.9rem', color: 'var(--text-secondary)'}}>Context affects strategy (e.g., "Child has medical needs," "History of domestic violence," "Abductor has dual citizenship").</p>
                         <textarea 
                             value={data.additionalContext || ''} 
                             onChange={e => setData({...data, additionalContext: e.target.value})} 
@@ -3564,7 +3824,7 @@ Format the response as a clear, easy-to-follow list. Use markdown for formatting
         const btn = element.querySelector('.button-download') as HTMLElement | null;
         if (btn) btn.style.display = 'none';
         try {
-            const canvas = await html2canvas(element, { scale: 2, backgroundColor: '#f8f9fa' });
+            const canvas = await html2canvas(element, { scale: 2, backgroundColor: 'var(--surface-raised)' });
             if (btn) btn.style.display = '';
             const imgData = canvas.toDataURL('image/png');
             const pdf = new jsPDF({ orientation: 'p', unit: 'px', format: [canvas.width, canvas.height] });
@@ -3581,7 +3841,7 @@ Format the response as a clear, easy-to-follow list. Use markdown for formatting
         <div className="tool-card" style={{ cursor: 'default' }}>
             <button className="button-secondary" onClick={onBack} style={{ marginBottom: '1rem' }}>&larr; Back</button>
             <h2>Prevention Steps</h2>
-            <p style={{ color: '#555', marginBottom: '1.5rem' }}>Worried your co-parent may try to take your child out of the country? Enter your country below and we'll generate a specific, actionable prevention checklist you can start on right now.</p>
+            <p style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem' }}>Worried your co-parent may try to take your child out of the country? Enter your country below and we'll generate a specific, actionable prevention checklist you can start on right now.</p>
             <form onSubmit={handleSubmit} className="form-grid">
                 <div className="full-width">
                     <label>Your Current Country of Residence</label>
@@ -3749,9 +4009,9 @@ const ContactListBuilder: React.FC<{ profile: CaseProfile }> = ({ profile }) => 
                     {suggesting ? 'Finding Contacts...' : '🤖 AI Suggest Contacts'}
                 </button>
             </div>
-            <p style={{ fontSize: '0.9rem', color: '#666' }}>Build your team of contacts - lawyers, agencies, police, and advocates. AI can suggest key contacts based on your case countries.</p>
+            <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>Build your team of contacts - lawyers, agencies, police, and advocates. AI can suggest key contacts based on your case countries.</p>
 
-            <div className="form-grid" style={{ backgroundColor: '#f8f9fa', padding: '1rem', borderRadius: '8px', marginBottom: '1.5rem' }}>
+            <div className="form-grid" style={{ backgroundColor: 'var(--surface-raised)', padding: '1rem', borderRadius: '8px', marginBottom: '1.5rem' }}>
                 <input type="text" placeholder="Name / Agency" value={newContact.name || ''} onChange={e => setNewContact({...newContact, name: e.target.value})} />
                 <input type="text" placeholder="Role (e.g., FBI Agent, Lawyer)" value={newContact.role || ''} onChange={e => setNewContact({...newContact, role: e.target.value})} />
                 <input type="email" placeholder="Email" value={newContact.email || ''} onChange={e => setNewContact({...newContact, email: e.target.value})} />
@@ -3762,7 +4022,7 @@ const ContactListBuilder: React.FC<{ profile: CaseProfile }> = ({ profile }) => 
 
             <div>
                 {contacts.length === 0 && (
-                    <div style={{ textAlign: 'center', padding: '2rem', color: '#666', backgroundColor: '#f8f9fa', borderRadius: '8px' }}>
+                    <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-secondary)', backgroundColor: 'var(--surface-raised)', borderRadius: '8px' }}>
                         <p style={{ fontSize: '0.95rem', marginBottom: '0.5rem' }}>You'll need lawyers, government officials, embassy contacts, and maybe an investigator.</p>
                         <p style={{ fontSize: '0.9rem' }}>Click <strong>"AI Suggest Contacts"</strong> below to get country-specific recommendations — or add your own.</p>
                     </div>
@@ -3776,7 +4036,7 @@ const ContactListBuilder: React.FC<{ profile: CaseProfile }> = ({ profile }) => 
                                 {c.email && <button onClick={() => copyText(c.email!, 'email')}>📧 {c.email}</button>}
                                 {c.phone && <button onClick={() => copyText(c.phone!, 'phone')}>📞 {c.phone}</button>}
                             </div>
-                            {c.notes && <div style={{ fontSize: '0.85rem', color: '#666', marginTop: '0.5rem' }}>{c.notes}</div>}
+                            {c.notes && <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '0.5rem' }}>{c.notes}</div>}
                         </div>
                         <div className="contact-card-actions">
                             <button onClick={() => deleteContact(c.id)} title="Delete Contact">🗑️</button>
@@ -3886,7 +4146,7 @@ const SupportResources: React.FC<{ profile: CaseProfile }> = ({ profile }) => {
     return (
         <div className="tool-card" style={{ cursor: 'default' }}>
             <h2>Support & Mental Health</h2>
-            <p style={{ color: '#555', marginBottom: '1rem' }}>
+            <p style={{ color: 'var(--text-secondary)', marginBottom: '1rem' }}>
                 {profile.childName ? `Fighting for ${profile.childName}` : 'This fight'} is brutal on your mental health. You don't have to do this alone. This tool finds therapists, support groups, NGOs, and financial resources specific to your situation and location.
             </p>
 
@@ -3911,12 +4171,12 @@ const SupportResources: React.FC<{ profile: CaseProfile }> = ({ profile }) => {
                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                                             <div>
                                                 <strong>{r.name}</strong>
-                                                {r.location && <span style={{ fontSize: '0.8rem', color: '#666', marginLeft: '0.5rem' }}>{r.location}</span>}
+                                                {r.location && <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginLeft: '0.5rem' }}>{r.location}</span>}
                                             </div>
-                                            {r.url && <a href={r.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: '0.8rem', color: '#1e3a5f', whiteSpace: 'nowrap' }}>Visit →</a>}
+                                            {r.url && <a href={r.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: '0.8rem', color: 'var(--accent)', whiteSpace: 'nowrap' }}>Visit →</a>}
                                         </div>
-                                        <p style={{ fontSize: '0.88rem', color: '#444', margin: '0.25rem 0' }}>{r.description}</p>
-                                        {r.contact && <p style={{ fontSize: '0.8rem', color: '#1e3a5f' }}>{r.contact}</p>}
+                                        <p style={{ fontSize: '0.88rem', color: 'var(--text-primary)', margin: '0.25rem 0' }}>{r.description}</p>
+                                        {r.contact && <p style={{ fontSize: '0.8rem', color: 'var(--accent)' }}>{r.contact}</p>}
                                     </div>
                                 ))}
                             </div>
@@ -3929,7 +4189,7 @@ const SupportResources: React.FC<{ profile: CaseProfile }> = ({ profile }) => {
             )}
 
             {hasSearched && resources.length === 0 && !loading && (
-                <p style={{ color: '#666', marginTop: '1rem' }}>No resources found. Try searching again.</p>
+                <p style={{ color: 'var(--text-secondary)', marginTop: '1rem' }}>No resources found. Try searching again.</p>
             )}
 
             <div className="disclaimer-block" style={{ marginTop: '1.5rem' }}>
@@ -3946,7 +4206,7 @@ const HowItWorks: React.FC<{ onBack: () => void }> = ({ onBack }) => {
         <div className="tool-card" style={{ cursor: 'default' }}>
             <button className="button-secondary" onClick={onBack} style={{ marginBottom: '1rem' }}>&larr; Back</button>
             <h2>How This Works</h2>
-            <p style={{ color: '#555', marginBottom: '1.5rem' }}>This is a free tool built by a parent going through this. Here's what it does and how to use it.</p>
+            <p style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem' }}>This is a free tool built by a parent going through this. Here's what it does and how to use it.</p>
 
             <div className="how-it-works-section">
                 <h3>🔒 Your data stays on YOUR device</h3>
@@ -4000,7 +4260,7 @@ const HowItWorks: React.FC<{ onBack: () => void }> = ({ onBack }) => {
                 </ul>
             </div>
 
-            <p style={{ fontSize: '0.85rem', color: '#666', marginTop: '1.5rem' }}>Built by a parent going through this. <a href="https://rescuecharlotte.org" target="_blank" rel="noopener noreferrer" style={{ color: '#1e3a5f' }}>rescuecharlotte.org</a></p>
+            <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '1.5rem' }}>Built by a parent going through this. <a href="https://rescuecharlotte.org" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)' }}>rescuecharlotte.org</a></p>
         </div>
     );
 };
@@ -4014,7 +4274,7 @@ const WelcomeDisclaimer: React.FC<{ onDismiss: () => void }> = ({ onDismiss }) =
                 <h2>Quick heads up</h2>
                 <p>This is an <strong>MVP</strong> — it works and people have found it helpful, but it's still being built. Things may break.</p>
                 <p>Your data is stored <strong>locally in your browser</strong>. Nothing sensitive leaves your machine. Use the same browser and you're good.</p>
-                <p style={{ fontSize: '0.85rem', color: '#666', marginTop: '0.75rem' }}>Built by a parent going through this. <a href="https://rescuecharlotte.org" target="_blank" rel="noopener noreferrer" style={{ color: '#1e3a5f' }}>rescuecharlotte.org</a></p>
+                <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '0.75rem' }}>Built by a parent going through this. <a href="https://rescuecharlotte.org" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)' }}>rescuecharlotte.org</a></p>
                 <button className="button-primary" onClick={onDismiss} style={{ marginTop: '1rem', width: '100%', padding: '0.75rem', fontSize: '1rem' }}>Got it</button>
             </div>
         </div>
@@ -4139,7 +4399,6 @@ const App: React.FC = () => {
 
     const handleAddTask = (newTask: ActionItem) => {
         setItems(prev => [newTask, ...prev]);
-        setView('myChecklist');
     };
     
     const handleDossierUpdate = (d: DossierData) => {
@@ -4360,8 +4619,8 @@ const App: React.FC = () => {
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.75rem 1rem', backgroundColor: 'var(--md-sys-color-primary-container)', borderRadius: 'var(--md-sys-shape-corner-medium)', marginBottom: '1rem', fontSize: '0.9rem' }}>
                             <span>Welcome back. You were last working on <strong>{viewLabels[lastView] || lastView}</strong>.</span>
                             <div style={{ display: 'flex', gap: '0.5rem' }}>
-                                <button onClick={() => { navigateTo(lastView); setShowWelcomeBack(false); }} style={{ background: 'var(--md-sys-color-primary)', color: 'white', border: 'none', borderRadius: '6px', padding: '0.3rem 0.7rem', fontSize: '0.85rem', cursor: 'pointer' }}>Continue →</button>
-                                <button onClick={() => setShowWelcomeBack(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.85rem', color: '#666' }}>✕</button>
+                                <button onClick={() => { navigateTo(lastView); setShowWelcomeBack(false); }} style={{ background: 'var(--md-sys-color-primary)', color: 'white', border: 'none', borderRadius: '8px', padding: '0.3rem 0.7rem', fontSize: '0.85rem', cursor: 'pointer' }}>Continue →</button>
+                                <button onClick={() => setShowWelcomeBack(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>✕</button>
                             </div>
                         </div>
                     )}
@@ -4521,7 +4780,7 @@ const App: React.FC = () => {
                         </>
                     )}
                     {'Notification' in window && (
-                        <button onClick={toggleNotifications} style={{ marginTop: '0.5rem', background: 'none', border: '1px solid rgba(200,216,232,0.2)', color: notificationsEnabled ? '#93c5fd' : 'rgba(200,216,232,0.5)', cursor: 'pointer', fontSize: '0.7rem', padding: '0.3rem 0.6rem', borderRadius: '6px', width: '100%', textAlign: 'center', transition: 'all 0.2s' }}>
+                        <button onClick={toggleNotifications} style={{ marginTop: '0.5rem', background: 'none', border: '1px solid rgba(200,216,232,0.2)', color: notificationsEnabled ? '#93c5fd' : 'rgba(200,216,232,0.5)', cursor: 'pointer', fontSize: '0.7rem', padding: '0.3rem 0.6rem', borderRadius: '8px', width: '100%', textAlign: 'center', transition: 'all 0.2s' }}>
                             {notificationsEnabled ? '🔔 Reminders On' : '🔕 Enable Reminders'}
                         </button>
                     )}
