@@ -5,6 +5,7 @@ import { initializeApp } from "firebase/app";
 import { getFirestore, collection, getDocs, addDoc, doc, updateDoc, writeBatch, getDoc, deleteDoc, query, where, setDoc, onSnapshot, orderBy } from "firebase/firestore";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, User, signInAnonymously } from "firebase/auth";
 import { jsPDF } from 'jspdf';
+import { Analytics } from '@vercel/analytics/react';
 import html2canvas from 'html2canvas';
 // knowledgeBaseTemplates inlined directly into seedData below (external .js import unreliable on CDN host)
 
@@ -7188,4 +7189,4 @@ const App: React.FC = () => {
 
 const container = document.getElementById('root');
 const root = createRoot(container!);
-root.render(<ErrorBoundary><App /></ErrorBoundary>);
+root.render(<ErrorBoundary><App /><Analytics /></ErrorBoundary>);
