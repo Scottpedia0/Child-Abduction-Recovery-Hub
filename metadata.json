@@ -1,7 +1,0 @@
-{
-  "name": "Copy of International Parental Abduction Recovery Hub",
-  "description": "A hub to provide advice and resources for parents dealing with international parental child abduction.",
-  "requestFramePermissions": [
-    "microphone"
-  ]
-}
