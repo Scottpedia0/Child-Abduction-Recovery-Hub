@@ -7188,7 +7188,6 @@ const App: React.FC = () => {
                                <a onClick={() => navigateTo('knowledgeBase')}>Knowledge Base</a>
                                <a onClick={() => navigateTo('dataManagement')}>Data Management</a>
                                <a onClick={() => navigateTo('termsOfService')}>Terms of Service</a>
-                               <a href="/maintainers.html">Project Update / Maintainers</a>
                             </div>
                         </div>
                     </div>
