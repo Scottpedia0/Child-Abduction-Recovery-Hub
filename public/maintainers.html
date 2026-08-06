@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Two Children Came Home With Help from Recovery Hub | Maintainers Wanted</title>
+    <meta name="description" content="Recovery Hub supported two families during successful child recoveries. The open-source project now serves roughly 20–25 parents in a typical month and needs maintainers." />
+    <link rel="canonical" href="https://hub.rescuecharlotte.org/maintainers.html" />
+
+    <meta property="og:type" content="article" />
+    <meta property="og:url" content="https://hub.rescuecharlotte.org/maintainers.html" />
+    <meta property="og:title" content="Two children came home with help from Recovery Hub. Now it needs maintainers." />
+    <meta property="og:description" content="A small win and a practical call for engineers to help maintain a free, local-first child recovery tool." />
+    <meta property="article:published_time" content="2026-08-06" />
+
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="Two children came home with help from Recovery Hub. Now it needs maintainers." />
+    <meta name="twitter:description" content="A small win and a practical call for engineers to help maintain a free, local-first child recovery tool." />
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-6WTVWL7QVZ"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-6WTVWL7QVZ');
+    </script>
+
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "Article",
+        "headline": "Two children came home with help from Recovery Hub. Now it needs maintainers.",
+        "description": "A small win and a practical call for engineers to help maintain a free, local-first tool used by parents navigating international child abduction.",
+        "datePublished": "2026-08-06",
+        "dateModified": "2026-08-06",
+        "author": {
+          "@type": "Person",
+          "name": "Scott Moran"
+        },
+        "publisher": {
+          "@type": "Organization",
+          "name": "Recovery Hub"
+        },
+        "mainEntityOfPage": "https://hub.rescuecharlotte.org/maintainers.html"
+      }
+    </script>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <style>
+      :root {
+        color-scheme: light;
+        --ink: #172033;
+        --muted: #5a6376;
+        --navy: #0f2744;
+        --navy-light: #1e3a5f;
+        --line: #dfe5ec;
+        --soft: #f3f6f9;
+        --white: #ffffff;
+      }
+
+      * { box-sizing: border-box; }
+
+      body {
+        margin: 0;
+        background: #f7f8fb;
+        color: var(--ink);
+        font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        line-height: 1.65;
+      }
+
+      a { color: var(--navy-light); }
+
+      .site-header {
+        background: linear-gradient(135deg, var(--navy), var(--navy-light));
+        color: var(--white);
+      }
+
+      .site-header-inner,
+      .article-shell,
+      .site-footer-inner {
+        width: calc(100% - 40px);
+        max-width: 820px;
+        margin: 0 auto;
+      }
+
+      .site-header-inner {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        min-height: 72px;
+        gap: 24px;
+      }
+
+      .brand {
+        color: var(--white);
+        font-size: 1rem;
+        font-weight: 700;
+        text-decoration: none;
+      }
+
+      .site-header nav {
+        display: flex;
+        gap: 20px;
+      }
+
+      .site-header nav a {
+        color: rgba(255, 255, 255, 0.82);
+        font-size: 0.84rem;
+        font-weight: 600;
+        text-decoration: none;
+      }
+
+      .article-shell {
+        background: var(--white);
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        box-shadow: 0 16px 44px rgba(15, 39, 68, 0.08);
+        margin-bottom: 64px;
+        margin-top: 48px;
+        overflow: hidden;
+      }
+
+      article { padding: clamp(32px, 7vw, 72px); }
+
+      .eyebrow {
+        color: var(--navy-light);
+        font-size: 0.74rem;
+        font-weight: 700;
+        letter-spacing: 0.09em;
+        margin: 0 0 18px;
+        text-transform: uppercase;
+      }
+
+      h1 {
+        font-size: clamp(2.25rem, 7vw, 4.25rem);
+        letter-spacing: -0.045em;
+        line-height: 1.02;
+        margin: 0;
+        max-width: 12ch;
+      }
+
+      .dek {
+        color: var(--muted);
+        font-size: clamp(1.05rem, 2.3vw, 1.28rem);
+        line-height: 1.55;
+        margin: 28px 0 20px;
+        max-width: 65ch;
+      }
+
+      .meta {
+        border-bottom: 1px solid var(--line);
+        color: #788397;
+        font-size: 0.8rem;
+        margin: 0 0 40px;
+        padding-bottom: 28px;
+      }
+
+      h2 {
+        font-size: 1.35rem;
+        letter-spacing: -0.025em;
+        line-height: 1.3;
+        margin: 40px 0 14px;
+      }
+
+      p, li { font-size: 1rem; }
+      p { margin: 0 0 20px; }
+      ul { padding-left: 1.3rem; }
+      li { margin: 0 0 10px; padding-left: 0.3rem; }
+
+      .metric {
+        background: var(--soft);
+        border-left: 4px solid var(--navy-light);
+        border-radius: 0 12px 12px 0;
+        margin: 32px 0;
+        padding: 22px 24px;
+      }
+
+      .metric strong {
+        display: block;
+        font-size: 1.45rem;
+        letter-spacing: -0.025em;
+        margin-bottom: 4px;
+      }
+
+      .metric p { color: var(--muted); margin: 0; }
+
+      .privacy-note {
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        margin: 32px 0;
+        padding: 22px 24px;
+      }
+
+      .privacy-note h2 { margin-top: 0; }
+      .privacy-note p:last-child { margin-bottom: 0; }
+
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-top: 32px;
+      }
+
+      .button {
+        border: 1px solid var(--navy-light);
+        border-radius: 9px;
+        display: inline-flex;
+        font-size: 0.9rem;
+        font-weight: 700;
+        justify-content: center;
+        padding: 12px 17px;
+        text-decoration: none;
+      }
+
+      .button-primary { background: var(--navy-light); color: var(--white); }
+      .button-secondary { background: var(--white); color: var(--navy-light); }
+
+      .case-safety {
+        color: var(--muted);
+        font-size: 0.82rem;
+        margin-top: 20px;
+      }
+
+      .site-footer {
+        color: var(--muted);
+        font-size: 0.8rem;
+        padding: 0 0 48px;
+        text-align: center;
+      }
+
+      @media (max-width: 600px) {
+        .site-header-inner,
+        .article-shell,
+        .site-footer-inner {
+          width: calc(100% - 24px);
+        }
+
+        .site-header-inner { min-height: 64px; }
+        .site-header nav a:first-child { display: none; }
+        .article-shell { border-radius: 12px; margin-top: 20px; }
+        article { padding: 30px 22px 36px; }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="site-header-inner">
+        <a class="brand" href="/">Recovery Hub</a>
+        <nav aria-label="Project links">
+          <a href="/">Open the Hub</a>
+          <a href="https://github.com/Scottpedia0/Child-Abduction-Recovery-Hub" target="_blank" rel="noopener noreferrer">GitHub</a>
+        </nav>
+      </div>
+    </header>
+
+    <main class="article-shell">
+      <article>
+        <p class="eyebrow">A small win—and a call for help</p>
+        <h1>Two children came home with help from Recovery Hub. Now it needs maintainers.</h1>
+        <p class="dek">Recovery Hub supported two families during successful child recoveries. The free, open-source tool now serves roughly 20–25 parents in a typical month and needs engineers who can help keep it useful, safe and reliable.</p>
+        <p class="meta">By Scott Moran, project creator · Published <time datetime="2026-08-06">August 6, 2026</time> · Milestone reached by May 2026</p>
+
+        <p>Recovery Hub is a free case-management and outreach tool for parents navigating international parental child abduction. It was built to fill a practical gap: agencies, lawyers and nonprofit resources exist, but parents are still left to coordinate an enormous amount of work themselves.</p>
+
+        <p>Two families have now used the Hub during cases that ended with their children returning home. The families and their teams did the recovery work; the Hub was one tool that supported them. I am not sharing any details about either family, and the software cannot promise the same result in another case.</p>
+
+        <div class="metric">
+          <strong>Roughly 20–25 parents use it in a typical month.</strong>
+          <p>That is a small number by normal software standards and meaningful usage for this specific problem.</p>
+        </div>
+
+        <h2>Why open source is the right model</h2>
+        <p>International parental child abduction is a low-incidence, high-consequence problem. The small number of cases creates weak commercial incentives, even though the burden on each affected child and parent is enormous. Parents are still left to coordinate legal filings, evidence, outreach, government contacts, expenses and recovery logistics under extreme pressure.</p>
+
+        <p>The <a href="https://travel.state.gov/content/dam/NEWIPCAAssets/2026%20-%20Annual%20Report%20on%20International%20Child%20Abduction.pdf" target="_blank" rel="noopener noreferrer">U.S. State Department’s 2026 annual report</a> illustrates the mismatch. On page 61, the report says the Hague Abduction Convention is not in force between the United States and the Philippines, so Convention remedies are unavailable for that corridor. The Department handled 13 cases involving 16 children there during 2025 and reported that none were resolved that year. Those figures cover cases reported to the State Department, not the global total. This corridor is one illustrative example; it is unrelated to the two families described above. It is a small market and a real infrastructure gap. Open source is a practical way to serve it.</p>
+
+        <h2>What exists today</h2>
+        <p>The Hub is already a substantial working application. Parents can use it to:</p>
+        <ul>
+          <li>turn a case profile and country pair into a prioritized action plan;</li>
+          <li>track tasks, contacts, expenses, correspondence, calls, documents and events;</li>
+          <li>build an exportable evidence timeline and case journal;</li>
+          <li>use AI-assisted document analysis, strategy tools and communication drafts;</li>
+          <li>create local backups, import their data and export useful records; and</li>
+          <li>build a public campaign page when public outreach is part of their strategy.</li>
+        </ul>
+
+        <p>It is built with React, TypeScript and Vite, with Firebase for optional account sync and Gemini powering AI-assisted workflows. The code is available under the MIT License.</p>
+
+        <div class="privacy-note">
+          <h2>Local-first, not local-only</h2>
+          <p>Core case data and uploaded files are stored in the browser by default. If a parent chooses an AI feature, the selected context or document is sent to Gemini for processing. Signing in syncs some structured records to Firebase. Public campaign pages publish only the information a parent chooses to make public. Google Analytics and Vercel Analytics measure usage.</p>
+          <p>Those boundaries need clearer documentation, stronger tests and a proper privacy and security review. That is part of the maintainer work, not something I want to hand-wave away.</p>
+        </div>
+
+        <h2>Where help is needed</h2>
+        <p>I do not have the capacity to be the only person accountable for maintaining a tool that families in crisis depend on. I am looking for a few people who can take real ownership of defined parts of it:</p>
+        <ul>
+          <li>frontend engineers comfortable with offline-first browser storage, data portability and React;</li>
+          <li>privacy and security engineers who can review storage, sync, AI-processing and public-sharing boundaries;</li>
+          <li>engineers who can add tests, improve accessibility and establish a safer release process; and</li>
+          <li>child-welfare technologists who can validate workflows and resource quality.</li>
+        </ul>
+
+        <p>This is not a request to handle individual family cases. It is a request to help make the tool more dependable for parents doing that work themselves.</p>
+
+        <div class="actions">
+          <a class="button button-primary" href="https://github.com/Scottpedia0/Child-Abduction-Recovery-Hub" target="_blank" rel="noopener noreferrer">Read the code on GitHub</a>
+          <a class="button button-secondary" href="https://github.com/Scottpedia0/Child-Abduction-Recovery-Hub/issues/new" target="_blank" rel="noopener noreferrer">Offer to help</a>
+          <a class="button button-secondary" href="/">Open Recovery Hub</a>
+        </div>
+        <p class="case-safety">Please do not put a family’s case details, documents or identifying information in a public GitHub issue.</p>
+      </article>
+    </main>
+
+    <footer class="site-footer">
+      <div class="site-footer-inner">Recovery Hub is a free informational and organizational tool. It is not legal advice and does not guarantee an outcome.</div>
+    </footer>
+  </body>
+</html>

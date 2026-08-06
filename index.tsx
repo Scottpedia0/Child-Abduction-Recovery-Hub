@@ -278,7 +278,7 @@ const getFilesFromLocalVault = async (): Promise<VaultDocument[]> => {
         const store = tx.objectStore(STORE_NAME);
         const request = store.getAll();
         request.onsuccess = () => {
-             const docs = request.result.map(({ blob, ...rest }) => rest);
+             const docs = request.result.map(({ blob, fileBlob, ...rest }) => rest);
              resolve(docs);
         };
         request.onerror = () => reject(request.error);
@@ -5221,10 +5221,23 @@ const CaseSettings: React.FC<{ profile: CaseProfile, setProfile: (p: CaseProfile
         pdf.save(`${profile.childName}_Full_Case_File.pdf`);
     };
 
-    const clearData = () => {
-        if (confirm("Are you sure you want to wipe all local data? This cannot be undone.")) {
+    const clearData = async () => {
+        if (!confirm("Are you sure you want to wipe all local data? This cannot be undone.")) return;
+
+        try {
+            const db = await openVaultDB();
+            await new Promise<void>((resolve, reject) => {
+                const tx = db.transaction(STORE_NAME, 'readwrite');
+                tx.objectStore(STORE_NAME).clear();
+                tx.oncomplete = () => { db.close(); resolve(); };
+                tx.onerror = () => { db.close(); reject(tx.error); };
+                tx.onabort = () => { db.close(); reject(tx.error); };
+            });
             localStorage.clear();
             window.location.reload();
+        } catch (error) {
+            console.error('Local data wipe failed', error);
+            alert('Recovery Hub could not wipe all local data. Close any other Hub tabs and try again.');
         }
     };
 
@@ -5299,13 +5312,14 @@ const CaseSettings: React.FC<{ profile: CaseProfile, setProfile: (p: CaseProfile
                                 await new Promise<void>((resolve, reject) => {
                                     allReq.onsuccess = () => {
                                         const records = allReq.result;
-                                        let pending = records.filter((r: any) => r.fileBlob).length;
+                                        let pending = records.filter((r: any) => r.blob || r.fileBlob).length;
                                         if (pending === 0) { resolve(); return; }
                                         records.forEach((rec: any) => {
-                                            if (rec.fileBlob) {
+                                            const storedBlob = rec.blob || rec.fileBlob;
+                                            if (storedBlob) {
                                                 const reader = new FileReader();
                                                 reader.onload = () => { vaultFiles.push({ id: rec.id, name: rec.name, dataUrl: reader.result as string }); pending--; if (pending === 0) resolve(); };
-                                                reader.readAsDataURL(rec.fileBlob);
+                                                reader.readAsDataURL(storedBlob);
                                             }
                                         });
                                     };
@@ -5343,7 +5357,7 @@ const CaseSettings: React.FC<{ profile: CaseProfile, setProfile: (p: CaseProfile
                                             const blob = await resp.blob();
                                             const meta = data.vaultMetadata?.find((m: any) => m.id === vf.id) || {};
                                             const tx = idb.transaction(STORE_NAME, 'readwrite');
-                                            tx.objectStore(STORE_NAME).put({ ...meta, id: vf.id, name: vf.name, fileBlob: blob });
+                                            tx.objectStore(STORE_NAME).put({ ...meta, id: vf.id, name: vf.name, blob });
                                         } catch {}
                                     }
                                 }
@@ -5359,7 +5373,7 @@ const CaseSettings: React.FC<{ profile: CaseProfile, setProfile: (p: CaseProfile
 
             <div style={{ padding: '1rem', border: '1px solid #ffccbc', backgroundColor: '#fff3e0', borderRadius: '8px' }}>
                 <h4 style={{ color: '#d84315', marginTop: 0 }}>⚠️ Danger Zone</h4>
-                <p>This will permanently delete all Case Profiles, Journals, and Checklists stored on this browser.</p>
+                <p>This will permanently delete all case data and uploaded documents stored in this browser.</p>
                 <button className="button-danger" onClick={clearData}>Wipe All Local Data</button>
             </div>
         </div>
@@ -5709,7 +5723,7 @@ const TermsOfService: React.FC = () => (
         <h2>Terms of Service & Disclaimer</h2>
         <p>This application is a support tool for informational and organizational purposes only.</p>
         <p><strong>Not Legal Advice:</strong> The Recovery Hub uses Artificial Intelligence to help organize information and draft documents. It is not a substitute for a qualified attorney. International family law is complex and fact-specific.</p>
-        <p><strong>Data Privacy:</strong> By default, this app stores data locally on your device (localStorage and IndexedDB). If you sign in, data is encrypted and synced to the cloud. Please review our Data Management section for more details on how to wipe your data.</p>
+        <p><strong>Data Privacy:</strong> This app is local-first, not local-only. Core case data and uploaded files are stored in your browser by default. AI features send the information or documents you choose to analyze to Google Gemini for processing. If you sign in, some structured records sync to Firebase. Public campaign pages publish the information you choose to include, and usage analytics are enabled. Review Data Management to export or wipe local data.</p>
         <p><strong>Limitation of Liability:</strong> The creators of this tool accept no liability for the outcome of your case. Use this tool at your own risk.</p>
     </div>
 );
@@ -5756,16 +5770,17 @@ const DataManagement: React.FC = () => {
                     allReq.onsuccess = () => {
                         const records = allReq.result;
                         records.forEach((rec: any) => {
-                            if (rec.fileBlob) {
+                            const storedBlob = rec.blob || rec.fileBlob;
+                            if (storedBlob) {
                                 const reader = new FileReader();
                                 reader.onload = () => {
                                     vaultFiles.push({ id: rec.id, name: rec.name, dataUrl: reader.result as string });
-                                    if (vaultFiles.length === records.filter((r: any) => r.fileBlob).length) resolve();
+                                    if (vaultFiles.length === records.filter((r: any) => r.blob || r.fileBlob).length) resolve();
                                 };
-                                reader.readAsDataURL(rec.fileBlob);
+                                reader.readAsDataURL(storedBlob);
                             }
                         });
-                        if (records.filter((r: any) => r.fileBlob).length === 0) resolve();
+                        if (records.filter((r: any) => r.blob || r.fileBlob).length === 0) resolve();
                     };
                     allReq.onerror = () => reject(allReq.error);
                 });
@@ -5827,7 +5842,7 @@ const DataManagement: React.FC = () => {
                         const blob = await resp.blob();
                         const meta = data.vaultMetadata?.find((m: any) => m.id === vf.id) || {};
                         const tx = idb.transaction(STORE_NAME, 'readwrite');
-                        tx.objectStore(STORE_NAME).put({ ...meta, id: vf.id, name: vf.name, fileBlob: blob });
+                        tx.objectStore(STORE_NAME).put({ ...meta, id: vf.id, name: vf.name, blob });
                     } catch (err) {
                         console.error(`Failed to restore file ${vf.name}`, err);
                     }
@@ -6559,14 +6574,15 @@ const HowItWorks: React.FC<{ onBack: () => void }> = ({ onBack }) => {
             <p style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem' }}>This is a free tool built by a parent going through this. Here's what it does and how to use it.</p>
 
             <div className="how-it-works-section">
-                <h3>🔒 Your data stays on YOUR device</h3>
-                <p>Everything you enter — documents, logs, case details — is stored <strong>in your browser</strong> on this specific computer. Nothing sensitive goes to a server. That means:</p>
+                <h3>🔒 Local-first data storage</h3>
+                <p>Core case data and uploaded files are stored <strong>in your browser</strong> on this specific computer by default. The boundaries change when you choose cloud, AI, or public campaign features:</p>
                 <ul>
-                    <li>Nobody else can see your data</li>
                     <li>If you clear your browser data or use a different computer, it's gone</li>
-                    <li>Use the <strong>same browser on the same machine</strong> every time</li>
-                    <li>Sign in with Google to back up your case profile to the cloud</li>
-                    <li>Use <strong>Data Management</strong> to export a backup you can move to another device</li>
+                    <li>Use the <strong>same browser on the same machine</strong>, or export a backup from Data Management</li>
+                    <li>Signing in with Google syncs some structured records to Firebase</li>
+                    <li>AI features send the information or documents you choose to analyze to Google Gemini for processing</li>
+                    <li>Campaign pages publish the information you choose to include</li>
+                    <li>Google Analytics and Vercel Analytics collect usage data</li>
                 </ul>
             </div>
 
@@ -6623,7 +6639,7 @@ const WelcomeDisclaimer: React.FC<{ onDismiss: () => void }> = ({ onDismiss }) =
             <div className="welcome-modal compact">
                 <h2>Quick heads up</h2>
                 <p>This is an <strong>MVP</strong> — it works and people have found it helpful, but it's still being built. Things may break.</p>
-                <p>Your data is stored <strong>locally in your browser</strong>. Nothing sensitive leaves your machine. Use the same browser and you're good.</p>
+                <p>This app is <strong>local-first, not local-only</strong>. Core case data and uploaded files stay in your browser by default. AI features process the information you choose to send, signing in syncs some records to Firebase, public campaigns publish selected information, and usage analytics are enabled.</p>
                 <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '0.75rem' }}>Built by a parent going through this. <a href="https://rescuecharlotte.org" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)' }}>rescuecharlotte.org</a></p>
                 <button className="button-primary" onClick={onDismiss} style={{ marginTop: '1rem', width: '100%', padding: '0.75rem', fontSize: '1rem' }}>Got it</button>
             </div>
@@ -7123,8 +7139,8 @@ const App: React.FC = () => {
                             </button>
                             {!nudgeDismissed && caseProfile.isProfileComplete && (
                                 <div className="sidebar-nudge">
-                                    <strong>💡 Your data is local only</strong>
-                                    Sign in with Google to back up your case across devices and never lose your work.
+                                    <strong>💡 Your core data is local</strong>
+                                    Sign in with Google to sync your case profile and task list across devices.
                                 </div>
                             )}
                         </>
@@ -7149,7 +7165,7 @@ const App: React.FC = () => {
                     {showSignInNudge && (
                         <div className="signin-nudge-banner">
                             <span>☁️</span>
-                            <span style={{ flex: 1 }}>Your work is saved locally. <strong>Sign in</strong> to back it up and access from any device.</span>
+                            <span style={{ flex: 1 }}>Your work is saved locally. <strong>Sign in</strong> to sync your case profile and task list across devices.</span>
                             <button onClick={handleSignIn}>Sign In</button>
                             <button className="nudge-dismiss" onClick={dismissNudge}>✕</button>
                         </div>
@@ -7172,6 +7188,7 @@ const App: React.FC = () => {
                                <a onClick={() => navigateTo('knowledgeBase')}>Knowledge Base</a>
                                <a onClick={() => navigateTo('dataManagement')}>Data Management</a>
                                <a onClick={() => navigateTo('termsOfService')}>Terms of Service</a>
+                               <a href="/maintainers.html">Project Update / Maintainers</a>
                             </div>
                         </div>
                     </div>
