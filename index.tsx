@@ -5475,7 +5475,7 @@ const CampaignSiteBuilder: React.FC<{ profile: CaseProfile }> = ({ profile }) =>
                     .map((l: LogEntry) => ({ date: l.date, title: l.type, description: l.description }));
             }
 
-            const id = 'CASE_' + (profile.childName.replace(/\s/g, '_') || 'UNNAMED') + '_' + Date.now();
+            const id = `CASE_${crypto.randomUUID()}`;
             const campaignData = {
                 childName: profile.childName,
                 story: story,
@@ -5684,7 +5684,7 @@ const PublicCampaignViewer: React.FC<{ id: string, previewData?: any }> = ({ id,
                 {data.links && data.links.length > 0 && (
                     <div style={{ marginBottom: '2rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                         {data.links.map((l: any, i: number) => (
-                            <a key={i} href={l.url} target="_blank" className="button-primary full-width" style={{ textAlign: 'center', textDecoration: 'none' }}>{l.label}</a>
+                            <a key={i} href={l.url} target="_blank" rel="noopener noreferrer" className="button-primary full-width" style={{ textAlign: 'center', textDecoration: 'none' }}>{l.label}</a>
                         ))}
                     </div>
                 )}
@@ -5963,6 +5963,7 @@ const OnboardingWizard: React.FC<{ onComplete: (p: CaseProfile) => void, onPreve
     return (
         <div className="tool-card">
             <h2>Case Setup Wizard</h2>
+            {step === 0 && <p style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem' }}>Use Recovery Hub to organize next steps, documents, contacts, expenses, and outreach for an international parental child abduction case.</p>}
             {onPreventionClick && step === 0 && (
                 <div className="tool-card highlight" onClick={onPreventionClick} style={{ marginBottom: '1.5rem', cursor: 'pointer' }}>
                     <h3>🛡️ Worried About Abduction?</h3>
@@ -7188,6 +7189,7 @@ const App: React.FC = () => {
                                <a onClick={() => navigateTo('knowledgeBase')}>Knowledge Base</a>
                                <a onClick={() => navigateTo('dataManagement')}>Data Management</a>
                                <a onClick={() => navigateTo('termsOfService')}>Terms of Service</a>
+                               <a href="https://github.com/Scottpedia0/Child-Abduction-Recovery-Hub" target="_blank" rel="noopener noreferrer">Contribute on GitHub</a>
                             </div>
                         </div>
                     </div>
@@ -7205,4 +7207,5 @@ const App: React.FC = () => {
 
 const container = document.getElementById('root');
 const root = createRoot(container!);
-root.render(<ErrorBoundary><App /><Analytics /></ErrorBoundary>);
+const isPublicCampaign = new URLSearchParams(window.location.search).has('c');
+root.render(<ErrorBoundary><App />{!isPublicCampaign && <Analytics />}</ErrorBoundary>);

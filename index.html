@@ -1,34 +1,78 @@
 <!DOCTYPE html>
 <html lang="en">
   <head>
-    <!-- Google Analytics -->
-    <script async src="https://www.googletagmanager.com/gtag/js?id=G-6WTVWL7QVZ"></script>
-    <script>
-      window.dataLayer = window.dataLayer || [];
-      function gtag(){dataLayer.push(arguments);}
-      gtag('js', new Date());
-      gtag('config', 'G-6WTVWL7QVZ');
-    </script>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Recovery Hub | International Parental Child Abduction Support & Resources</title>
-    <meta name="description" content="Free resources for parents facing international child abduction. Step-by-step recovery guides, legal templates, embassy contacts, and support from families who've been through it. You are not alone." />
+    <!-- Google Analytics is intentionally disabled on public campaign URLs. -->
+    <script>
+      if (!new URLSearchParams(window.location.search).has('c')) {
+        const analyticsScript = document.createElement('script');
+        analyticsScript.async = true;
+        analyticsScript.src = 'https://www.googletagmanager.com/gtag/js?id=G-6WTVWL7QVZ';
+        document.head.appendChild(analyticsScript);
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'G-6WTVWL7QVZ');
+      }
+    </script>
+    <title>International Parental Child Abduction Help | Recovery Hub</title>
+    <meta name="description" content="Free, open-source tool to organize next steps, documents, contacts, expenses, and outreach for international parental child abduction cases. Not legal advice." />
     <link rel="canonical" href="https://hub.rescuecharlotte.org/" />
 
     <!-- Open Graph -->
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://hub.rescuecharlotte.org/" />
-    <meta property="og:title" content="Recovery Hub | International Parental Child Abduction Support" />
-    <meta property="og:description" content="Free resources for parents facing international child abduction. Step-by-step recovery guides, legal templates, and support from families who've been through it." />
+    <meta property="og:site_name" content="Recovery Hub" />
+    <meta property="og:title" content="International Parental Child Abduction Help | Recovery Hub" />
+    <meta property="og:description" content="Free, open-source tool to organize next steps, documents, contacts, expenses, and outreach for international parental child abduction cases. Not legal advice." />
 
     <!-- Twitter -->
-    <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="Recovery Hub | International Parental Child Abduction Support" />
-    <meta name="twitter:description" content="Free resources for parents facing international child abduction. Step-by-step recovery guides, legal templates, and support from families who've been through it." />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="International Parental Child Abduction Help | Recovery Hub" />
+    <meta name="twitter:description" content="Free, open-source tool to organize next steps, documents, contacts, expenses, and outreach for international parental child abduction cases. Not legal advice." />
 
     <!-- Additional SEO -->
-    <meta name="keywords" content="international child abduction, parental kidnapping, Hague Convention, child recovery, custody abduction, child taken abroad, parental abduction help, left-behind parent, child abduction resources" />
     <meta name="robots" content="index, follow" />
+    <script id="recovery-hub-schema" type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        "name": "Recovery Hub",
+        "url": "https://hub.rescuecharlotte.org/",
+        "description": "Free, open-source tool to organize next steps, documents, contacts, expenses, and outreach for international parental child abduction cases. Not legal advice.",
+        "inLanguage": "en",
+        "about": {
+          "@type": "Thing",
+          "name": "International parental child abduction"
+        },
+        "audience": {
+          "@type": "Audience",
+          "audienceType": "Parents and legal guardians responding to or seeking to prevent international parental child abduction"
+        },
+        "applicationCategory": "UtilitiesApplication",
+        "operatingSystem": "Any",
+        "browserRequirements": "Requires JavaScript and a modern browser; IndexedDB is used for local document storage.",
+        "isAccessibleForFree": true,
+        "license": "https://opensource.org/license/mit",
+        "sameAs": "https://github.com/Scottpedia0/Child-Abduction-Recovery-Hub",
+        "featureList": [
+          "Task planning",
+          "Document organization",
+          "Case timelines",
+          "Contact and expense tracking",
+          "Communication drafting",
+          "Local backup and restore"
+        ]
+      }
+    </script>
+    <script>
+      if (new URLSearchParams(window.location.search).has('c')) {
+        document.querySelector('meta[name="robots"]')?.setAttribute('content', 'noindex, nofollow, noarchive');
+        document.querySelector('link[rel="canonical"]')?.remove();
+        document.querySelector('#recovery-hub-schema')?.remove();
+      }
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Nunito+Sans:opsz,wght@6..12,400;6..12,600;6..12,700&display=swap" rel="stylesheet">
@@ -48,8 +92,17 @@
   }
 }
 </script>
-</head>
+  </head>
   <body>
+    <noscript>
+      <main style="max-width: 760px; margin: 3rem auto; padding: 0 1.25rem; font-family: Inter, system-ui, sans-serif; line-height: 1.6; color: #172033;">
+        <h1>Recovery Hub</h1>
+        <p>Recovery Hub is a free, open-source workspace for parents and legal guardians responding to or trying to prevent international parental child abduction. It helps organize practical next steps and records in one browser-based workspace.</p>
+        <p>Core case data and uploaded files are stored in your browser by default. AI, sign-in, analytics and public campaign features have different data boundaries; review them before entering information.</p>
+        <p>This tool provides organizational and informational support. It is not legal advice, and AI-generated material should be checked with qualified professionals and official sources.</p>
+        <p><a href="https://github.com/Scottpedia0/Child-Abduction-Recovery-Hub">View or help maintain the open-source project on GitHub</a>.</p>
+      </main>
+    </noscript>
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
   </body>
