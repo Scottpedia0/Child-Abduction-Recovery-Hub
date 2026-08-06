@@ -5,8 +5,6 @@
 > **⚠️ Status:** Active Development / Beta
 > **⚠️ Disclaimer:** This tool uses Artificial Intelligence to organize information and draft communications. It is **not** a substitute for legal counsel.
 
-**[Project update: Two children came home with help from Recovery Hub. Now it needs maintainers.](https://hub.rescuecharlotte.org/maintainers.html)**
-
 ---
 
 ## 🚀 GO LIVE MANUAL (Deployment Guide)
@@ -108,4 +106,4 @@ To take this app from code to a live website, follow these steps:
 
 Recovery Hub needs maintainers across frontend engineering, offline-first data storage, privacy and security, accessibility, testing, and child-welfare workflow validation.
 
-Read the [maintainer call](https://hub.rescuecharlotte.org/maintainers.html), review the code, and [open an issue](https://github.com/Scottpedia0/Child-Abduction-Recovery-Hub/issues/new) with a concrete area you can own. Do not post family case details, documents, or identifying information in public issues.
+Review the code and [open an issue](https://github.com/Scottpedia0/Child-Abduction-Recovery-Hub/issues/new) with a concrete area you can own. Do not post family case details, documents, or identifying information in public issues.
